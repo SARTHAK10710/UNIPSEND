@@ -1,4 +1,3 @@
-version: '3.8'
 services:
 
   gateway:
@@ -10,7 +9,6 @@ services:
       - auth-service
       - plaid-service
       - investment-service
-      - subscription-service
       - notification-service
       - user-service
       - ai-service
@@ -20,12 +18,18 @@ services:
     ports:
       - "3001:3001"
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+    depends_on:
+      - postgres
 
   plaid-service:
     build: ./services/plaid-service
     ports:
       - "3002:3002"
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
     depends_on:
       - postgres
       - redis
@@ -35,14 +39,11 @@ services:
     ports:
       - "3003:3003"
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
     depends_on:
+      - postgres
       - redis
-
-  subscription-service:
-    build: ./services/subscription-service
-    ports:
-      - "3004:3004"
-    env_file: .env
 
   notification-service:
     build: ./services/notification-service
@@ -55,6 +56,8 @@ services:
     ports:
       - "3006:3006"
     env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
     depends_on:
       - postgres
 
@@ -73,7 +76,7 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
