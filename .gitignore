@@ -2,6 +2,7 @@ node_modules/
 __pycache__/
 *.pyc
 .env
+serviceAccountKey.json
 .DS_Store
 coverage/
 dist/
