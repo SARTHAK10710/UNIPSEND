@@ -1,0 +1,1 @@
+C:\Users\negis\unispend\frontend\android\app\build\intermediates\cxx\Debug\6g4r734l\obj\arm64-v8a

@@ -8,3 +8,7 @@ google-services.json
 coverage/
 dist/
 build/
+.vscode/
+*.log
+frontend/android/app/build/
+frontend/android/.gradle/
