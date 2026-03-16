@@ -22,8 +22,10 @@ const SpendingScreen = () => {
     totalSpent,
     dailyData,
     categoryBreakdown,
+    topMerchants,
     suggestions,
     heatmapData,
+    monthComparison,
     loading,
     refreshing,
     onRefresh,
@@ -94,7 +96,7 @@ const SpendingScreen = () => {
           <Text style={styles.totalLabel}>Total Spent</Text>
           <Text style={styles.totalAmount}>₹{totalSpent}</Text>
           <View style={styles.totalTrend}>
-            <Text style={styles.totalTrendText}>📉 -8% vs last month</Text>
+            <Text style={styles.totalTrendText}>{monthComparison ? `${monthComparison.direction === 'up' ? '📈' : '📉'} ${monthComparison.direction === 'up' ? '+' : '-'}${monthComparison.change}% vs last month` : ''}</Text>
           </View>
         </LinearGradient>
 

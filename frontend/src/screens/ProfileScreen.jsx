@@ -34,6 +34,7 @@ const ProfileScreen = ({ navigation }) => {
     profile,
     riskScore,
     riskLabel,
+    segment,
     emergencyFund,
     connectedAccounts,
     loading,
@@ -60,12 +61,12 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const riskColor = riskScore < 40 ? '#4effd6' : riskScore < 70 ? '#ffd166' : '#ff6b6b';
-  const initials = (profile.name || 'Sarthak Negi')
+  const initials = (profile?.name || '')
     .split(' ')
-    .map((n) => n[0])
+    .map((n) => n?.[0] || '')
     .join('')
     .toUpperCase()
-    .slice(0, 2);
+    .slice(0, 2) || '?';
 
   return (
     <View style={styles.container}>
@@ -89,10 +90,10 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.avatarLarge}>
             <Text style={styles.avatarInitials}>{initials}</Text>
           </View>
-          <Text style={styles.profileName}>{profile.name || 'Sarthak Negi'}</Text>
-          <Text style={styles.profileEmail}>{profile.email || 'sarthak@unispend.com'}</Text>
+          <Text style={styles.profileName}>{profile?.name || ''}</Text>
+          <Text style={styles.profileEmail}>{profile?.email || ''}</Text>
           <View style={styles.memberBadge}>
-            <Text style={styles.memberText}>🥇 Gold Member</Text>
+            <Text style={styles.memberText}>{segment ? `🌟 ${segment}` : ''}</Text>
           </View>
         </View>
 
@@ -120,7 +121,7 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.emergencyHeader}>
             <Text style={styles.cardTitle}>Emergency Fund</Text>
             <Text style={styles.emergencyTarget}>
-              ₹{emergencyFund.current.toLocaleString()} / ₹{emergencyFund.target.toLocaleString()}
+              {emergencyFund ? `₹${emergencyFund.current.toLocaleString()} / ₹${emergencyFund.target.toLocaleString()}` : '—'}
             </Text>
           </View>
           <View style={styles.emergencyBarBg}>
@@ -129,12 +130,12 @@ const ProfileScreen = ({ navigation }) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={[styles.emergencyBarFill, {
-                width: `${Math.min((emergencyFund.current / emergencyFund.target) * 100, 100)}%`,
+                width: `${emergencyFund ? Math.min(emergencyFund.percent, 100) : 0}%`,
               }]}
             />
           </View>
           <Text style={styles.emergencyPct}>
-            {Math.round((emergencyFund.current / emergencyFund.target) * 100)}% of goal reached
+            {emergencyFund ? `${emergencyFund.percent}% of goal reached` : 'No data yet'}
           </Text>
         </View>
 

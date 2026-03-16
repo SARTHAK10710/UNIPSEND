@@ -71,7 +71,7 @@ const SubscriptionsScreen = () => {
           <Text style={styles.totalAmount}>₹{totalMonthly}</Text>
           <View style={styles.totalChange}>
             <Text style={styles.changeIcon}>📊</Text>
-            <Text style={styles.changeText}>5 active subscriptions</Text>
+            <Text style={styles.changeText}>{activeSubscriptions.length} active subscription{activeSubscriptions.length !== 1 ? 's' : ''}</Text>
           </View>
         </LinearGradient>
 

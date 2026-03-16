@@ -1,93 +1,148 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { userAPI, plaidAPI } from '../services/api';
+import { filterByMonth } from '../utils/dataTransformers';
 
-const MOCK_CONNECTED_ACCOUNTS = [
-  { name: 'HDFC Bank', type: 'Savings Account', icon: '🏦', color: '#1a73e8', connected: true },
-  { name: 'SBI Card', type: 'Credit Card', icon: '💳', color: '#ff6b6b', connected: true },
-  { name: 'ICICI Bank', type: 'Current Account', icon: '🏛️', color: '#ffd166', connected: false },
-];
+const ACCOUNT_ICONS = { depository: '🏦', credit: '💳', investment: '📈', loan: '🏛️' };
+const ACCOUNT_COLORS = { depository: '#1a73e8', credit: '#ff6b6b', investment: '#4effd6', loan: '#ffd166' };
 
 export const useProfile = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+
+  const [profile, setProfile] = useState(null);
+  const [riskScore, setRiskScore] = useState(null);
+  const [riskLabel, setRiskLabel] = useState(null);
+  const [segment, setSegment] = useState(null);
+  const [emergencyFund, setEmergencyFund] = useState(null);
+  const [connectedAccounts, setConnectedAccounts] = useState([]);
+
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [riskLoading, setRiskLoading] = useState(true);
+  const [accountsLoading, setAccountsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [profile, setProfile] = useState({
-    name: user?.displayName || 'Sarthak Negi',
-    email: user?.email || 'sarthak@unispend.com',
-  });
-  const [riskScore, setRiskScore] = useState(64);
-  const [riskLabel, setRiskLabel] = useState('Moderate');
-  const [emergencyFund, setEmergencyFund] = useState({ current: 45000, target: 75000 });
-  const [connectedAccounts, setConnectedAccounts] = useState(MOCK_CONNECTED_ACCOUNTS);
+  const [error, setError] = useState(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchProfile = useCallback(async () => {
+    setProfileLoading(true);
     try {
-      setLoading(true);
-      const [profileRes, riskRes, balRes] = await Promise.allSettled([
-        userAPI.getProfile(),
-        userAPI.getRiskScore(),
-        plaidAPI.getBalance(),
-      ]);
-
-      if (profileRes.status === 'fulfilled' && profileRes.value?.data) {
-        const data = profileRes.value.data;
-        setProfile({
-          name: [data.first_name, data.last_name].filter(Boolean).join(' ') || profile.name,
-          email: data.email || profile.email,
-        });
-      }
-
-      if (riskRes.status === 'fulfilled' && riskRes.value?.data) {
-        const data = riskRes.value.data;
-        if (data.risk_score !== undefined) {
-          setRiskScore(data.risk_score);
-          setRiskLabel(data.label || (
-            data.risk_score < 34 ? 'Conservative' : data.risk_score < 67 ? 'Moderate' : 'Aggressive'
-          ));
-        }
-      }
-
-      if (balRes.status === 'fulfilled' && balRes.value?.data?.accounts) {
-        const accounts = balRes.value.data.accounts;
-        const ACCOUNT_ICONS = { depository: '🏦', credit: '💳', investment: '📈', loan: '🏛️' };
-        const ACCOUNT_COLORS = { depository: '#1a73e8', credit: '#ff6b6b', investment: '#4effd6', loan: '#ffd166' };
-        const formatted = accounts.map((acc) => ({
-          name: acc.name || acc.official_name || 'Account',
-          type: acc.subtype || acc.type || 'Account',
-          icon: ACCOUNT_ICONS[acc.type] || '🏦',
-          color: ACCOUNT_COLORS[acc.type] || '#1a73e8',
-          connected: true,
-          balance: acc.current,
-          available: acc.available,
-        }));
-        if (formatted.length > 0) setConnectedAccounts(formatted);
-      }
+      console.log('[useProfile] fetching profile...');
+      const res = await userAPI.getProfile();
+      const data = res.data;
+      setProfile({
+        name: [data.first_name, data.last_name].filter(Boolean).join(' ') || user?.displayName || '',
+        email: data.email || user?.email || '',
+        firstName: data.first_name,
+        lastName: data.last_name,
+      });
+      console.log('[useProfile] profile loaded:', data);
     } catch (err) {
-      // Use mock data
+      console.error('[useProfile] fetchProfile error:', err.message);
+      setProfile({
+        name: user?.displayName || '',
+        email: user?.email || '',
+      });
     } finally {
-      setLoading(false);
+      setProfileLoading(false);
+    }
+  }, [user]);
+
+  const fetchRiskScore = useCallback(async () => {
+    setRiskLoading(true);
+    try {
+      console.log('[useProfile] fetching risk score...');
+      const res = await userAPI.getRiskScore();
+      const data = res.data;
+      setRiskScore(data.risk_score);
+      setRiskLabel(data.label);
+      setSegment(data.segment);
+      console.log('[useProfile] risk score loaded:', data);
+    } catch (err) {
+      console.error('[useProfile] fetchRiskScore error:', err.message);
+      setRiskScore(null);
+      setRiskLabel(null);
+    } finally {
+      setRiskLoading(false);
     }
   }, []);
 
+  const fetchAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    try {
+      console.log('[useProfile] fetching connected accounts...');
+      const res = await plaidAPI.getBalance();
+      const accounts = res.data?.accounts || [];
+
+      const formatted = accounts.map((acc) => ({
+        name: acc.name || acc.official_name || 'Account',
+        type: acc.subtype || acc.type || 'Account',
+        icon: ACCOUNT_ICONS[acc.type] || '🏦',
+        color: ACCOUNT_COLORS[acc.type] || '#1a73e8',
+        connected: true,
+        balance: acc.current,
+        available: acc.available,
+      }));
+      setConnectedAccounts(formatted);
+      console.log('[useProfile] accounts loaded:', formatted.length);
+
+      const savingsAccount = accounts.find((a) => a.subtype === 'savings' || a.type === 'depository');
+      const savingsBalance = savingsAccount?.current || 0;
+
+      const txRes = await plaidAPI.getTransactions();
+      const txs = txRes.data?.transactions || [];
+      const now = new Date();
+      const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+      const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const lastMonthTxs = filterByMonth(txs, lastMonth, lastMonthYear);
+      const monthlySpend = lastMonthTxs.reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0);
+
+      const emergencyTarget = monthlySpend * 6;
+      setEmergencyFund({
+        current: Math.round(savingsBalance),
+        target: Math.round(emergencyTarget) || 1,
+        percent: emergencyTarget > 0 ? Math.round((savingsBalance / emergencyTarget) * 100) : 0,
+      });
+    } catch (err) {
+      console.error('[useProfile] fetchAccounts error:', err.message);
+      setConnectedAccounts([]);
+      setEmergencyFund(null);
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
+  const fetchAll = useCallback(async () => {
+    setError(null);
+    try {
+      await Promise.all([fetchProfile(), fetchRiskScore(), fetchAccounts()]);
+    } catch (err) {
+      setError('Failed to load profile data');
+      console.error('[useProfile] fetchAll error:', err.message);
+    }
+  }, [fetchProfile, fetchRiskScore, fetchAccounts]);
+
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchAll();
+  }, [fetchAll]);
+
+  const isLoading = profileLoading && riskLoading && accountsLoading;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchData();
+    await fetchAll();
     setRefreshing(false);
-  }, [fetchData]);
+  }, [fetchAll]);
 
   return {
     profile,
     riskScore,
     riskLabel,
+    segment,
     emergencyFund,
     connectedAccounts,
-    loading,
+    loading: isLoading,
     refreshing,
     onRefresh,
+    error,
+    refresh: fetchAll,
   };
 };

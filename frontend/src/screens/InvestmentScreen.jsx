@@ -47,17 +47,22 @@ const MarketMover = ({ symbol, price, change, icon }) => (
 
 const InvestmentScreen = () => {
   const {
-    portfolio,
-    riskScore,
-    riskLabel,
+    account,
     holdings,
+    movers,
+    orders,
     allocation,
-    marketMovers,
-    loading,
-    refreshing,
-    onRefresh,
+    accountLoading,
+    holdingsLoading,
+    moversLoading,
+    orderLoading,
+    error,
     placeOrder,
+    refresh,
   } = useInvestment();
+
+  const riskScore = 0;
+  const riskLabel = '';
 
   const [orderSymbol, setOrderSymbol] = useState('');
   const [orderQty, setOrderQty] = useState('');
@@ -69,11 +74,15 @@ const InvestmentScreen = () => {
       return;
     }
     try {
-      await placeOrder({ symbol: orderSymbol, qty: parseInt(orderQty), side: 'buy' });
-      Alert.alert('Success', `Order placed for ${orderQty} shares of ${orderSymbol}`);
-      setShowOrderModal(false);
-      setOrderSymbol('');
-      setOrderQty('');
+      const result = await placeOrder(orderSymbol, parseInt(orderQty), 'buy');
+      if (result.success) {
+        Alert.alert('Success', `Order placed for ${orderQty} shares of ${orderSymbol}`);
+        setShowOrderModal(false);
+        setOrderSymbol('');
+        setOrderQty('');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to place order');
+      }
     } catch (err) {
       Alert.alert('Error', 'Failed to place order');
     }
@@ -89,7 +98,7 @@ const InvestmentScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#7c6aff" colors={['#7c6aff']} />
+          <RefreshControl refreshing={false} onRefresh={refresh} tintColor="#7c6aff" colors={['#7c6aff']} />
         }
       >
         {/* Header */}
@@ -100,7 +109,7 @@ const InvestmentScreen = () => {
             </View>
             <View>
               <Text style={styles.welcomeSmall}>Welcome back,</Text>
-              <Text style={styles.userName}>Alex Thompson</Text>
+              <Text style={styles.userName}>Portfolio</Text>
             </View>
           </View>
           <View style={styles.headerRight}>
@@ -113,13 +122,14 @@ const InvestmentScreen = () => {
           </View>
         </View>
 
-        {/* Market Ticker */}
+        {movers?.gainers?.[0] && (
         <View style={styles.tickerRow}>
-          <Text style={styles.tickerLabel}>NIFTY 50</Text>
-          <Text style={styles.tickerValueGreen}> 22,450.10 (+1.2%)</Text>
-          <Text style={styles.tickerLabel}>  SENSEX</Text>
-          <Text style={styles.tickerValueGreen}> 74,012.35 (+0.9%)</Text>
+          <Text style={styles.tickerLabel}>{movers.gainers[0]?.symbol || ''}</Text>
+          <Text style={styles.tickerValueGreen}> {movers.gainers[0]?.price || ''} ({movers.gainers[0]?.changePercent || ''})</Text>
+          {movers.gainers[1] && <><Text style={styles.tickerLabel}>  {movers.gainers[1]?.symbol || ''}</Text>
+          <Text style={styles.tickerValueGreen}> {movers.gainers[1]?.price || ''} ({movers.gainers[1]?.changePercent || ''})</Text></>}
         </View>
+        )}
 
         {/* Portfolio Value */}
         <LinearGradient
@@ -129,10 +139,10 @@ const InvestmentScreen = () => {
           style={styles.portfolioCard}
         >
           <Text style={styles.portfolioLabel}>Total Portfolio Value</Text>
-          <Text style={styles.portfolioValue}>₹{portfolio.totalValue || '41,250'}<Text style={styles.portfolioDecimal}>.45</Text></Text>
+          <Text style={styles.portfolioValue}>{account ? `₹${account.portfolioValue?.toLocaleString() || '0'}` : '—'}</Text>
           <View style={styles.returnsRow}>
-            <Text style={styles.returnsIcon}>📈</Text>
-            <Text style={styles.returnsText}>+₹{portfolio.todayReturn || '1,250'} ({portfolio.todayReturnPct || '3.12'}%)</Text>
+            <Text style={styles.returnsIcon}>{account?.dayPnl >= 0 ? '📈' : '📉'}</Text>
+            <Text style={styles.returnsText}>{account ? `${account.dayPnl >= 0 ? '+' : ''}₹${(account.dayPnl || 0).toLocaleString()}` : '—'}</Text>
           </View>
           <Text style={styles.returnsLabel}>TODAY'S RETURNS</Text>
         </LinearGradient>
@@ -193,7 +203,7 @@ const InvestmentScreen = () => {
             </View>
           </View>
           <Text style={[styles.riskLabel, { color: riskColor }]}>{riskLabel}</Text>
-          <Text style={styles.riskDescription}>Your portfolio is well-balanced for steady growth.</Text>
+          <Text style={styles.riskDescription}>{riskLabel ? `Your risk profile is ${riskLabel}` : ''}</Text>
         </View>
 
         {/* Asset Allocation */}
@@ -217,7 +227,7 @@ const InvestmentScreen = () => {
               {allocation.map((a, idx) => (
                 <View key={idx} style={styles.allocLegendItem}>
                   <View style={[styles.allocDot, { backgroundColor: a.color }]} />
-                  <Text style={styles.allocName}>{a.name}</Text>
+                  <Text style={styles.allocName}>{a.name} ({a.percentage}%)</Text>
                 </View>
               ))}
             </View>
@@ -227,7 +237,7 @@ const InvestmentScreen = () => {
         {/* Market Movers */}
         <Text style={styles.sectionTitle}>Market Movers</Text>
         <FlatList
-          data={marketMovers}
+          data={movers?.gainers ? [...(movers.gainers || []), ...(movers.losers || [])] : []}
           renderItem={renderMover}
           keyExtractor={(item) => item.symbol}
           horizontal

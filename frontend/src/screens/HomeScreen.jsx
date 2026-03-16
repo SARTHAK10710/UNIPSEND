@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatCurrency } from '../utils/formatCurrency';
 import {
   View,
   Text,
@@ -145,10 +146,10 @@ const HomeScreen = ({ navigation }) => {
           style={styles.balanceCard}
         >
           <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceAmount}>₹{balance.total || '21,020'}</Text>
+          <Text style={styles.balanceAmount}>{balance ? formatCurrency(balance.total) : '—'}</Text>
           <View style={styles.balanceTrend}>
             <Text style={styles.trendIcon}>📈</Text>
-            <Text style={styles.trendText}>+12.5% this month</Text>
+            <Text style={styles.trendText}>{balance ? `${(balance.accounts || []).length} linked accounts` : 'Connect a bank'}</Text>
           </View>
         </LinearGradient>
 
@@ -166,7 +167,7 @@ const HomeScreen = ({ navigation }) => {
               <Text style={styles.sectionTitle}>Spending Trend</Text>
               <Text style={styles.sectionSub}>Last 7 days</Text>
             </View>
-            <Text style={styles.trendAvg}>₹740/day</Text>
+            <Text style={styles.trendAvg}>{spendingTrend.length > 0 ? formatCurrency(Math.round(spendingTrend.reduce((s, d) => s + d.amount, 0) / Math.max(spendingTrend.filter(d => d.amount > 0).length, 1))) + '/day' : '—'}</Text>
           </View>
           <View style={styles.barChart}>
             {spendingTrend.map((day, idx) => (

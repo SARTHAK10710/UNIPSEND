@@ -46,11 +46,13 @@ const RewardsScreen = () => {
     totalCashback,
     pendingCashback,
     offers,
-    personalizedOffers,
     history,
+    tier,
+    nextTier,
     loading,
     refreshing,
     onRefresh,
+    error,
   } = useRewards();
 
   const renderPersonalizedOffer = ({ item }) => (
@@ -103,7 +105,7 @@ const RewardsScreen = () => {
             </View>
             <View style={styles.heroStat}>
               <Text style={styles.heroStatLabel}>This Month</Text>
-              <Text style={styles.heroStatValue}>₹{Math.floor(totalCashback * 0.2)}</Text>
+              <Text style={styles.heroStatValue}>₹{pendingCashback}</Text>
             </View>
             <View style={styles.heroStat}>
               <Text style={styles.heroStatLabel}>Offers Used</Text>
@@ -117,13 +119,13 @@ const RewardsScreen = () => {
           <View style={styles.tierHeader}>
             <Text style={styles.tierTitle}>Rewards Tier</Text>
             <View style={styles.tierBadge}>
-              <Text style={styles.tierBadgeText}>🥇 Gold</Text>
+              <Text style={styles.tierBadgeText}>{tier?.icon || '🥉'} {tier?.name || 'Bronze'}</Text>
             </View>
           </View>
           <View style={styles.tierProgress}>
-            <View style={styles.tierProgressFill} />
+            <View style={[styles.tierProgressFill, { width: `${nextTier?.threshold ? Math.min(100, ((nextTier.threshold - nextTier.remaining) / nextTier.threshold) * 100) : 0}%` }]} />
           </View>
-          <Text style={styles.tierProgressText}>₹2,500 more to reach Platinum</Text>
+          <Text style={styles.tierProgressText}>{nextTier?.remaining > 0 ? `₹${nextTier.remaining.toLocaleString()} more to reach ${nextTier.name}` : 'Max tier reached!'}</Text>
         </View>
 
         {/* Offers Grid */}
@@ -134,19 +136,7 @@ const RewardsScreen = () => {
           ))}
         </View>
 
-        {/* Personalized Offers */}
-        <View style={styles.personalizedHeader}>
-          <Text style={styles.personalizedIcon}>✨</Text>
-          <Text style={styles.sectionTitle}>Just For You</Text>
-        </View>
-        <FlatList
-          data={personalizedOffers}
-          renderItem={renderPersonalizedOffer}
-          keyExtractor={(item, idx) => `pers-${idx}`}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.personalizedList}
-        />
+
 
         {/* Earned History */}
         <View style={styles.historyHeader}>
