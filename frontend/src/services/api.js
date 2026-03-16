@@ -44,14 +44,14 @@ export const aiAPI = {
 };
 
 export const investmentAPI = {
-  getPortfolio: () => api.get('/api/investments/portfolio'),
   getAccount: () => api.get('/api/investments/account'),
-  getMarketPrice: (symbol) => api.get(`/api/investments/market/price/${symbol}`),
-  getMarketHistory: (symbol) => api.get(`/api/investments/market/history/${symbol}`),
-  searchSymbol: (query) => api.get(`/api/investments/market/search/${query}`),
+  getPortfolio: () => api.get('/api/investments/portfolio'),
   getMovers: () => api.get('/api/investments/market/movers'),
-  placeOrder: (orderData) => api.post('/api/investments/order', orderData),
   getOrders: () => api.get('/api/investments/orders'),
+  getPrice: (symbol) => api.get(`/api/investments/market/price/${symbol}`),
+  getHistory: (symbol) => api.get(`/api/investments/market/history/${symbol}`),
+  search: (query) => api.get(`/api/investments/market/search/${query}`),
+  placeOrder: (data) => api.post('/api/investments/order', data),
 };
 
 export const subscriptionAPI = {
