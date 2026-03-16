@@ -1,8 +1,9 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { auth } from "./firebase";
 
-// Use your machine's local IP for physical devices
-const API_BASE_URL = "http://192.168.1.3:3000";
+// Use localhost:3000 with adb reverse for emulators, or machine's local IP for physical devices
+const API_BASE_URL = "http://localhost:3000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -14,9 +15,21 @@ const api = axios.create({
 
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem("authToken");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      if (auth.currentUser) {
+        // getIdToken() returns the cached token if it hasn't expired,
+        // otherwise it refreshes it automatically.
+        const token = await auth.currentUser.getIdToken();
+        config.headers.Authorization = `Bearer ${token}`;
+        await AsyncStorage.setItem("authToken", token); // Sync it just in case
+      } else {
+        const token = await AsyncStorage.getItem("authToken");
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      }
+    } catch (e) {
+      console.error("Token fetch failed:", e);
     }
     return config;
   },

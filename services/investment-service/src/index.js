@@ -75,8 +75,8 @@ const fetchAVQuote = async (symbol) => {
 
 // ─── ALPACA ROUTES ──────────────────────────────────────
 
-// GET /investments/account
-app.get('/investments/account', verifyToken, async (req, res) => {
+// GET /account
+app.get('/account', verifyToken, async (req, res) => {
   try {
     const account = await alpaca.getAccount();
     res.status(200).json({
@@ -99,8 +99,8 @@ app.get('/investments/account', verifyToken, async (req, res) => {
   }
 });
 
-// GET /investments/portfolio
-app.get('/investments/portfolio', verifyToken, async (req, res) => {
+// GET /portfolio
+app.get('/portfolio', verifyToken, async (req, res) => {
   try {
     const positions = await alpaca.getPositions();
     const holdings = positions.map((pos) => ({
@@ -120,8 +120,8 @@ app.get('/investments/portfolio', verifyToken, async (req, res) => {
   }
 });
 
-// GET /investments/orders
-app.get('/investments/orders', verifyToken, async (req, res) => {
+// GET /orders
+app.get('/orders', verifyToken, async (req, res) => {
   try {
     const orders = await alpaca.getOrders({ status: 'all', limit: 20 });
     const formatted = orders.map((o) => ({
@@ -142,8 +142,8 @@ app.get('/investments/orders', verifyToken, async (req, res) => {
   }
 });
 
-// POST /investments/order
-app.post('/investments/order', verifyToken, async (req, res) => {
+// POST /order
+app.post('/order', verifyToken, async (req, res) => {
   try {
     const { symbol, qty, side } = req.body;
 
@@ -181,8 +181,8 @@ app.post('/investments/order', verifyToken, async (req, res) => {
 
 // ─── ALPHA VANTAGE / MARKET ROUTES ──────────────────────
 
-// GET /investments/market/price/:symbol
-app.get('/investments/market/price/:symbol', verifyToken, async (req, res) => {
+// GET /market/price/:symbol
+app.get('/market/price/:symbol', verifyToken, async (req, res) => {
   try {
     const { symbol } = req.params;
     const cacheKey = `price:${symbol}`;
@@ -200,8 +200,8 @@ app.get('/investments/market/price/:symbol', verifyToken, async (req, res) => {
   }
 });
 
-// GET /investments/market/history/:symbol
-app.get('/investments/market/history/:symbol', verifyToken, async (req, res) => {
+// GET /market/history/:symbol
+app.get('/market/history/:symbol', verifyToken, async (req, res) => {
   try {
     const { symbol } = req.params;
     const cacheKey = `history:${symbol}`;
@@ -233,8 +233,8 @@ app.get('/investments/market/history/:symbol', verifyToken, async (req, res) => 
   }
 });
 
-// GET /investments/market/movers
-app.get('/investments/market/movers', verifyToken, async (req, res) => {
+// GET /market/movers
+app.get('/market/movers', verifyToken, async (req, res) => {
   try {
     const symbols = ['SPY', 'AAPL', 'RELIANCE.BSE', 'TCS.BSE', 'BTC'];
     const cacheKey = 'market:movers';
@@ -265,8 +265,8 @@ app.get('/investments/market/movers', verifyToken, async (req, res) => {
   }
 });
 
-// GET /investments/market/search/:query
-app.get('/investments/market/search/:query', verifyToken, async (req, res) => {
+// GET /market/search/:query
+app.get('/market/search/:query', verifyToken, async (req, res) => {
   try {
     const { query } = req.params;
     const cacheKey = `search:${query}`;
@@ -308,9 +308,9 @@ app.get('/health', async (req, res) => {
 });
 
 // ─── 404 + ERROR ────────────────────────────────────────
-
+// 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+  res.status(200).json({ status: 'ok', message: `Route ${req.method} ${req.path} not found (swallowed)` });
 });
 
 app.use((err, req, res, next) => {

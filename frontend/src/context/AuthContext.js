@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { authAPI } from "../services/api";
 import {
-  initializeAuth,
-  getReactNativePersistence,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
@@ -10,19 +8,8 @@ import {
   GoogleAuthProvider,
   signInWithCredential,
 } from "firebase/auth";
-import { initializeApp } from "firebase/app";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-const firebaseConfig = {
-  apiKey: "AIzaSyA6STNNLXyD15qn5FsNWcm9C250v0qQzNA",
-  projectId: "unispend-37a68",
-  storageBucket: "unispend-37a68.firebasestorage.app",
-  appId: "1:656078903939:android:9e6c17fa0be45503f619b6",
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage),
-});
+import { auth } from "../services/firebase";
 
 const AuthContext = createContext({});
 

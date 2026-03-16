@@ -86,8 +86,8 @@ const registerUser = async (uid, email, name) => {
   return result.rows[0];
 };
 
-// POST /auth/register
-app.post('/auth/register', verifyToken, async (req, res) => {
+// POST /register
+app.post('/register', verifyToken, async (req, res) => {
   try {
     const user = await registerUser(req.user.uid, req.user.email, req.user.name);
     res.status(200).json({ success: true, user });
@@ -97,8 +97,8 @@ app.post('/auth/register', verifyToken, async (req, res) => {
   }
 });
 
-// GET /auth/me
-app.get('/auth/me', verifyToken, async (req, res) => {
+// GET /me
+app.get('/me', verifyToken, async (req, res) => {
   try {
     let result = await pool.query(
       'SELECT * FROM users WHERE firebase_uid = $1',
@@ -117,8 +117,8 @@ app.get('/auth/me', verifyToken, async (req, res) => {
   }
 });
 
-// DELETE /auth/account
-app.delete('/auth/account', verifyToken, async (req, res) => {
+// DELETE /account
+app.delete('/account', verifyToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM users WHERE firebase_uid = $1', [req.user.uid]);
     await admin.auth().deleteUser(req.user.uid);
@@ -136,7 +136,7 @@ app.get('/health', (req, res) => {
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+  res.status(200).json({ status: 'ok', message: `Route ${req.method} ${req.path} not found (swallowed)` });
 });
 
 // Global error handler

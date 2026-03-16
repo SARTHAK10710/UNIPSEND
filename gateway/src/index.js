@@ -13,15 +13,17 @@ app.use(cors());
 // Logging
 app.use(morgan("combined"));
 
-// Rate limiting: 100 requests per 15 minutes
+// Rate limiting: Disabled for development to prevent 429 errors
+/*
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: 1000,
     standardHeaders: true,
     legacyHeaders: false,
   }),
 );
+*/
 
 // Proxy routes
 const services = [
@@ -34,13 +36,11 @@ const services = [
 ];
 
 for (const { path, target } of services) {
-  const servicePrefix = path.replace('/api', '');
   app.use(
     path,
     createProxyMiddleware({
       target,
       changeOrigin: true,
-      pathRewrite: (reqPath) => `${servicePrefix}${reqPath}`,
     }),
   );
 }

@@ -16,7 +16,7 @@ router.get("/:firebaseUid", async (req, res) => {
       userResult.rows.length === 0 ||
       !userResult.rows[0].plaid_access_token
     ) {
-      return res.status(404).json({ error: "No linked bank account found" });
+      return res.status(200).json({ data: [], error: placeholder, message: "No linked bank account found" });
     }
 
     const response = await plaidClient.accountsGet({

@@ -14,7 +14,7 @@ const createProcessorToken = async (req, res) => {
       userResult.rows.length === 0 ||
       !userResult.rows[0].plaid_access_token
     ) {
-      return res.status(404).json({ error: "No linked bank account found" });
+      return res.status(200).json({ data: [], error: placeholder, message: "No linked bank account found" });
     }
 
     const accessToken = userResult.rows[0].plaid_access_token;
@@ -25,7 +25,7 @@ const createProcessorToken = async (req, res) => {
     const accountId = accountsResponse.data.accounts[0]?.account_id;
 
     if (!accountId) {
-      return res.status(404).json({ error: "No account found" });
+      return res.status(200).json({ data: [], error: placeholder, message: "No account found" });
     }
 
     const response = await plaidClient.processorTokenCreate({

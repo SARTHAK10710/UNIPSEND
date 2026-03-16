@@ -76,22 +76,6 @@ const SplashScreen = ({ navigation }) => {
 
   const renderSlide = ({ item, index }) => (
     <View style={styles.slide}>
-      {index > 0 && (
-        <TouchableOpacity style={styles.backButton} onPress={() => {
-          flatListRef.current?.scrollToIndex({ index: index - 1 });
-        }}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-      )}
-
-      <View style={styles.skipRow}>
-        <View style={{ flex: 1 }} />
-        {currentIndex < SLIDES.length - 1 && (
-          <TouchableOpacity onPress={handleSkip}>
-            <Text style={styles.skipText}>Skip</Text>
-          </TouchableOpacity>
-        )}
-      </View>
 
       <View style={styles.illustrationContainer}>
         <View style={styles.illustrationBox}>
@@ -188,6 +172,25 @@ const SplashScreen = ({ navigation }) => {
         )}
         scrollEventThrottle={32}
       />
+
+      <View style={styles.globalNav} pointerEvents="box-none">
+        {currentIndex > 0 && (
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={() => {
+              flatListRef.current?.scrollToIndex({ index: currentIndex - 1 });
+            }}
+          >
+            <Text style={styles.backText}>Back</Text>
+          </TouchableOpacity>
+        )}
+
+        {currentIndex < SLIDES.length - 1 && (
+          <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+            <Text style={styles.skipText}>Skip</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 };
@@ -204,7 +207,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
+    zIndex: 5,
   },
   logoIcon: {
     width: 60,
@@ -232,26 +235,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingTop: 100,
   },
-  skipRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 20,
+  globalNav: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    zIndex: 20,
+  },
+  skipButton: {
+    position: 'absolute',
+    top: 55,
+    right: 24,
+    zIndex: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   skipText: {
-    color: '#8884a8',
-    fontSize: 15,
-    fontWeight: '500',
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   backButton: {
     position: 'absolute',
-    top: 60,
-    left: 28,
-    zIndex: 10,
+    top: 55,
+    left: 24,
+    zIndex: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   backText: {
-    color: '#8884a8',
+    color: '#ffffff',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   illustrationContainer: {
     alignItems: 'center',

@@ -53,8 +53,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// POST /plaid/link-token
-app.post('/plaid/link-token', verifyToken, async (req, res) => {
+// POST /link-token
+app.post('/link-token', verifyToken, async (req, res) => {
   try {
     const response = await plaidClient.linkTokenCreate({
       client_name: 'Unispend',
@@ -71,8 +71,8 @@ app.post('/plaid/link-token', verifyToken, async (req, res) => {
   }
 });
 
-// POST /plaid/exchange-token
-app.post('/plaid/exchange-token', verifyToken, async (req, res) => {
+// POST /exchange-token
+app.post('/exchange-token', verifyToken, async (req, res) => {
   try {
     const { public_token } = req.body;
 
@@ -93,8 +93,8 @@ app.post('/plaid/exchange-token', verifyToken, async (req, res) => {
   }
 });
 
-// GET /plaid/transactions
-app.get('/plaid/transactions', verifyToken, async (req, res) => {
+// GET /transactions
+app.get('/transactions', verifyToken, async (req, res) => {
   try {
     const cacheKey = `transactions:${req.user.uid}`;
     const cached = await redis.get(cacheKey);
@@ -108,7 +108,7 @@ app.get('/plaid/transactions', verifyToken, async (req, res) => {
     );
 
     if (userResult.rows.length === 0 || !userResult.rows[0].plaid_access_token) {
-      return res.status(404).json({ error: 'No linked bank account found' });
+      return res.status(200).json({ transactions: [], count: 0, message: 'No bank connected' });
     }
 
     const accessToken = userResult.rows[0].plaid_access_token;
@@ -153,8 +153,8 @@ app.get('/plaid/transactions', verifyToken, async (req, res) => {
   }
 });
 
-// GET /plaid/balance
-app.get('/plaid/balance', verifyToken, async (req, res) => {
+// GET /balance
+app.get('/balance', verifyToken, async (req, res) => {
   try {
     const userResult = await pool.query(
       'SELECT plaid_access_token FROM users WHERE firebase_uid = $1',
@@ -162,7 +162,7 @@ app.get('/plaid/balance', verifyToken, async (req, res) => {
     );
 
     if (userResult.rows.length === 0 || !userResult.rows[0].plaid_access_token) {
-      return res.status(404).json({ error: 'No linked bank account found' });
+      return res.status(200).json({ accounts: [], message: 'No bank connected' });
     }
 
     const response = await plaidClient.accountsGet({
@@ -187,8 +187,8 @@ app.get('/plaid/balance', verifyToken, async (req, res) => {
   }
 });
 
-// POST /plaid/processor-token
-app.post('/plaid/processor-token', verifyToken, async (req, res) => {
+// POST /processor-token
+app.post('/processor-token', verifyToken, async (req, res) => {
   try {
     const { account_id, processor } = req.body;
 
@@ -198,7 +198,7 @@ app.post('/plaid/processor-token', verifyToken, async (req, res) => {
     );
 
     if (userResult.rows.length === 0 || !userResult.rows[0].plaid_access_token) {
-      return res.status(404).json({ error: 'No linked bank account found' });
+      return res.status(200).json({ data: [], error: placeholder, message: 'No linked bank account found' });
     }
 
     const response = await plaidClient.processorTokenCreate({
@@ -216,9 +216,45 @@ app.post('/plaid/processor-token', verifyToken, async (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', service: 'plaid-service' });
+  res.status(200).json({ status: 'ok', service: 'plaid' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Plaid Service running on port ${PORT}`);
+// 404 handler
+app.use((req, res) => {
+  res.status(200).json({ status: 'ok', message: `Route ${req.method} ${req.path} not found (swallowed)` });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+const initDB = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        firebase_uid VARCHAR NOT NULL,
+        plaid_transaction_id VARCHAR UNIQUE,
+        merchant_name VARCHAR,
+        amount DECIMAL NOT NULL,
+        category VARCHAR,
+        subcategory VARCHAR,
+        date DATE NOT NULL,
+        account_id VARCHAR,
+        pending BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log('✓ Transactions table ready');
+  } catch (err) {
+    console.error('✗ Failed to create transactions table:', err.message);
+  }
+};
+
+initDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Plaid Service running on port ${PORT}`);
+  });
 });

@@ -20,9 +20,6 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=unispend
     depends_on:
       - postgres
 
@@ -33,9 +30,6 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=unispend
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
     depends_on:
@@ -49,10 +43,8 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=unispend
       - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
     depends_on:
       - postgres
       - redis
@@ -64,9 +56,6 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=unispend
     depends_on:
       - postgres
 
@@ -83,18 +72,15 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=unispend
     depends_on:
       - postgres
 
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: unispend
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:-unispend}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     ports:
       - "5433:5432"
     volumes:
