@@ -37,6 +37,7 @@ services:
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=unispend
       - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
     depends_on:
       - postgres
       - redis

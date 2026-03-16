@@ -12,6 +12,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { PlaidLink } from 'react-native-plaid-link-sdk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
 const createLinkToken = () => api.post('/plaid/link-token');
@@ -25,6 +26,7 @@ const POPULAR_BANKS = [
 ];
 
 const ConnectBankScreen = ({ navigation }) => {
+  const { setHasConnectedBank, setSkippedBank } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isExchanging, setIsExchanging] = useState(false);
   const [selectedBank, setSelectedBank] = useState(null);
@@ -60,7 +62,8 @@ const ConnectBankScreen = ({ navigation }) => {
       try {
         await exchangeToken(success.publicToken);
         await AsyncStorage.setItem('bankSetupCompleted', 'true');
-        navigation.replace('Main');
+        setHasConnectedBank(true);
+        // AppNavigator will automatically switch to MainTabs
       } catch (err) {
         setIsExchanging(false);
         if (!err.response) {
@@ -70,7 +73,7 @@ const ConnectBankScreen = ({ navigation }) => {
         }
       }
     },
-    [navigation]
+    [setHasConnectedBank]
   );
 
   const handlePlaidExit = useCallback(
@@ -85,7 +88,8 @@ const ConnectBankScreen = ({ navigation }) => {
 
   const handleSkip = async () => {
     await AsyncStorage.setItem('bankSetupCompleted', 'true');
-    navigation.replace('Main');
+    setHasConnectedBank(true);
+    // AppNavigator will automatically switch to MainTabs
   };
 
   return (
@@ -169,7 +173,7 @@ const ConnectBankScreen = ({ navigation }) => {
           </TouchableOpacity>
         ))}
 
-        <TouchableOpacity style={styles.searchLink}>
+        <TouchableOpacity style={styles.searchLink} onPress={handleConnectBank}>
           <Text style={styles.searchLinkText}>Search for your bank</Text>
         </TouchableOpacity>
 

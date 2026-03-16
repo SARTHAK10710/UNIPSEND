@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, StyleSheet, StatusBar, ActivityIndicator, Text, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -31,9 +31,9 @@ const darkTheme = {
 };
 
 function AppNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, hasConnectedBank, bankCheckLoading } = useAuth();
 
-  if (loading) {
+  if (loading || bankCheckLoading) {
     return (
       <View style={styles.loadingContainer}>
         <View style={styles.loadingLogo}>
@@ -52,13 +52,19 @@ function AppNavigator() {
         animation: 'slide_from_right',
       }}
     >
-      {user ? (
+      {user && hasConnectedBank ? (
         <Stack.Screen name="Main" component={MainTabs} />
+      ) : user && !hasConnectedBank ? (
+        <>
+          <Stack.Screen name="ConnectBank" component={ConnectBankScreen} />
+          <Stack.Screen name="Main" component={MainTabs} />
+        </>
       ) : (
         <>
           <Stack.Screen name="Splash" component={SplashScreen} />
           <Stack.Screen name="Auth" component={AuthScreen} />
           <Stack.Screen name="ConnectBank" component={ConnectBankScreen} />
+          <Stack.Screen name="Main" component={MainTabs} />
         </>
       )}
     </Stack.Navigator>

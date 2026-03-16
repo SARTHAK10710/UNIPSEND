@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Animated,
   StatusBar,
-  Image,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -71,14 +70,6 @@ const SplashScreen = ({ navigation }) => {
     navigation.replace('Auth');
   };
 
-  const handleNext = () => {
-    if (currentIndex < SLIDES.length - 1) {
-      flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
-    } else {
-      goToAuth();
-    }
-  };
-
   const handleSkip = () => {
     goToAuth();
   };
@@ -131,29 +122,32 @@ const SplashScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.dotsContainer}>
-        {SLIDES.map((_, i) => (
-          <View
-            key={i}
+        {SLIDES.map((slide, i) => (
+          <TouchableOpacity
+            key={slide.id}
+            onPress={() => {
+              flatListRef.current?.scrollToIndex({ index: i });
+            }}
             style={[
               styles.dot,
-              i === index ? styles.dotActive : styles.dotInactive,
+              i === currentIndex ? styles.dotActive : styles.dotInactive,
             ]}
           />
         ))}
       </View>
 
-      <TouchableOpacity style={styles.continueButton} onPress={handleNext}>
-        <LinearGradient
-          colors={['#7c6aff', '#9b8aff']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.continueGradient}
-        >
-          <Text style={styles.continueText}>
-            {index === SLIDES.length - 1 ? 'Get Started' : 'Continue'}
-          </Text>
-        </LinearGradient>
-      </TouchableOpacity>
+      {index === SLIDES.length - 1 && (
+        <TouchableOpacity style={styles.continueButton} onPress={goToAuth}>
+          <LinearGradient
+            colors={['#7c6aff', '#9b8aff']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.continueGradient}
+          >
+            <Text style={styles.continueText}>Get Started</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
 
       {index === SLIDES.length - 1 && (
         <TouchableOpacity onPress={goToAuth} style={styles.loginLink}>
@@ -342,7 +336,7 @@ const styles = StyleSheet.create({
   },
   dotInactive: {
     width: 8,
-    backgroundColor: '#2a2a3a',
+    backgroundColor: '#8884a8',
   },
   continueButton: {
     marginBottom: 16,
