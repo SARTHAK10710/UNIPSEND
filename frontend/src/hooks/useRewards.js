@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { subscriptionAPI } from '../services/api';
 
 const MOCK_OFFERS = [
@@ -23,6 +23,8 @@ const MOCK_HISTORY = [
   { merchant: 'Zomato', date: 'Oct 12, 2023', amount: '60', icon: '🍽️' },
 ];
 
+const CAMPAIGN_COLORS = ['#ff6b6b', '#ffd166', '#7c6aff', '#4effd6', '#a78bfa'];
+
 export const useRewards = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -34,16 +36,35 @@ export const useRewards = () => {
 
   const fetchData = useCallback(async () => {
     try {
+      setLoading(true);
       const res = await subscriptionAPI.getRewards();
       if (res.data) {
-        if (res.data.offers) setOffers(res.data.offers);
+        if (res.data.rewards && res.data.rewards.length > 0) {
+          const formattedOffers = res.data.rewards.map((r, idx) => ({
+            title: r.name || 'Cashback Offer',
+            merchant: (r.name || '').toUpperCase(),
+            discount: r.type || 'DEAL',
+            icon: '🎁',
+            color: CAMPAIGN_COLORS[idx % CAMPAIGN_COLORS.length],
+            expiresIn: r.expiration_date
+              ? `${Math.ceil((new Date(r.expiration_date) - new Date()) / 86400000)} days`
+              : 'Limited',
+          }));
+          setOffers(formattedOffers);
+        }
         if (res.data.totalCashback) setTotalCashback(res.data.totalCashback);
         if (res.data.history) setHistory(res.data.history);
       }
     } catch (err) {
       // Use mock data
+    } finally {
+      setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

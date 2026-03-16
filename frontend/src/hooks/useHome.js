@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { plaidAPI, aiAPI } from '../services/api';
 
@@ -45,6 +45,13 @@ const MOCK_INSIGHTS = [
   },
 ];
 
+const CATEGORY_ICONS = {
+  'Food & Dining': '🍽️', 'Shopping': '🛍️', 'Transport': '🚗',
+  'Entertainment': '🎬', 'Bills': '📱', 'Other': '📋',
+  'FOOD_AND_DRINK': '🍽️', 'SHOPPING': '🛍️', 'TRANSPORTATION': '🚗',
+  'ENTERTAINMENT': '🎬', 'GENERAL_MERCHANDISE': '🛒',
+};
+
 export const useHome = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -60,25 +67,78 @@ export const useHome = () => {
 
   const fetchData = useCallback(async () => {
     try {
+      setLoading(true);
       const [txRes, balRes, aiRes] = await Promise.allSettled([
         plaidAPI.getTransactions(),
         plaidAPI.getBalance(),
         aiAPI.getInsights(),
       ]);
 
+      if (balRes.status === 'fulfilled' && balRes.value?.data?.accounts) {
+        const accounts = balRes.value.data.accounts;
+        const totalBalance = accounts.reduce((sum, acc) => sum + (acc.current || 0), 0);
+        setBalance({ total: totalBalance.toLocaleString() });
+
+        const totalAvailable = accounts.reduce((sum, acc) => sum + (acc.available || 0), 0);
+        setKpis((prev) => prev.map((kpi) => {
+          if (kpi.title === 'Saved') return { ...kpi, value: `₹${totalAvailable.toLocaleString()}` };
+          return kpi;
+        }));
+      }
+
       if (txRes.status === 'fulfilled' && txRes.value?.data) {
-        setTransactions(txRes.value.data.transactions || MOCK_TRANSACTIONS);
+        const txs = txRes.value.data.transactions || [];
+        if (txs.length > 0) {
+          const formattedTxs = txs.slice(0, 10).map((tx) => ({
+            name: tx.merchant_name || tx.category || 'Transaction',
+            date: new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+            amount: Math.abs(tx.amount).toLocaleString(),
+            icon: CATEGORY_ICONS[tx.category] || '💳',
+            positive: tx.amount < 0,
+          }));
+          setTransactions(formattedTxs);
+
+          const totalSpent = txs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+          setKpis((prev) => prev.map((kpi) => {
+            if (kpi.title === 'Spent') return { ...kpi, value: `₹${totalSpent.toLocaleString()}` };
+            return kpi;
+          }));
+
+          const catMap = {};
+          txs.forEach((tx) => {
+            const cat = tx.category || 'Other';
+            catMap[cat] = (catMap[cat] || 0) + Math.abs(tx.amount);
+          });
+          const totalCat = Object.values(catMap).reduce((s, v) => s + v, 0);
+          const catColors = ['#7c6aff', '#4effd6', '#ffd166', '#ff6b6b', '#a78bfa'];
+          const cats = Object.entries(catMap)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 5)
+            .map(([name, amount], idx) => ({
+              name,
+              amount: amount.toLocaleString(),
+              icon: CATEGORY_ICONS[name] || '📋',
+              color: catColors[idx % catColors.length],
+              progress: Math.round((amount / totalCat) * 100),
+            }));
+          if (cats.length > 0) setCategories(cats);
+        }
       }
-      if (balRes.status === 'fulfilled' && balRes.value?.data) {
-        setBalance(balRes.value.data || { total: '21,020' });
-      }
+
       if (aiRes.status === 'fulfilled' && aiRes.value?.data) {
-        setInsights(aiRes.value.data.insights || MOCK_INSIGHTS);
+        const data = aiRes.value.data;
+        if (data.insights) setInsights(data.insights);
       }
     } catch (err) {
       // Use mock data on failure
+    } finally {
+      setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

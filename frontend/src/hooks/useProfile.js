@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { userAPI, plaidAPI } from '../services/api';
 
@@ -23,6 +23,7 @@ export const useProfile = () => {
 
   const fetchData = useCallback(async () => {
     try {
+      setLoading(true);
       const [profileRes, riskRes, balRes] = await Promise.allSettled([
         userAPI.getProfile(),
         userAPI.getRiskScore(),
@@ -32,29 +33,46 @@ export const useProfile = () => {
       if (profileRes.status === 'fulfilled' && profileRes.value?.data) {
         const data = profileRes.value.data;
         setProfile({
-          name: data.name || profile.name,
+          name: [data.first_name, data.last_name].filter(Boolean).join(' ') || profile.name,
           email: data.email || profile.email,
         });
-        if (data.emergencyFund) setEmergencyFund(data.emergencyFund);
       }
 
       if (riskRes.status === 'fulfilled' && riskRes.value?.data) {
         const data = riskRes.value.data;
-        if (data.score !== undefined) {
-          setRiskScore(data.score);
-          setRiskLabel(
-            data.score < 40 ? 'Conservative' : data.score < 70 ? 'Moderate' : 'Aggressive'
-          );
+        if (data.risk_score !== undefined) {
+          setRiskScore(data.risk_score);
+          setRiskLabel(data.label || (
+            data.risk_score < 34 ? 'Conservative' : data.risk_score < 67 ? 'Moderate' : 'Aggressive'
+          ));
         }
       }
 
       if (balRes.status === 'fulfilled' && balRes.value?.data?.accounts) {
-        setConnectedAccounts(balRes.value.data.accounts);
+        const accounts = balRes.value.data.accounts;
+        const ACCOUNT_ICONS = { depository: '🏦', credit: '💳', investment: '📈', loan: '🏛️' };
+        const ACCOUNT_COLORS = { depository: '#1a73e8', credit: '#ff6b6b', investment: '#4effd6', loan: '#ffd166' };
+        const formatted = accounts.map((acc) => ({
+          name: acc.name || acc.official_name || 'Account',
+          type: acc.subtype || acc.type || 'Account',
+          icon: ACCOUNT_ICONS[acc.type] || '🏦',
+          color: ACCOUNT_COLORS[acc.type] || '#1a73e8',
+          connected: true,
+          balance: acc.current,
+          available: acc.available,
+        }));
+        if (formatted.length > 0) setConnectedAccounts(formatted);
       }
     } catch (err) {
       // Use mock data
+    } finally {
+      setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

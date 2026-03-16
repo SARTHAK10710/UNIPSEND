@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, StatusBar, ActivityIndicator, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, StatusBar, ActivityIndicator, Text, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -23,10 +23,10 @@ const darkTheme = {
     notification: '#ff6b6b',
   },
   fonts: {
-    regular: { fontFamily: 'System', fontWeight: '400' },
-    medium: { fontFamily: 'System', fontWeight: '500' },
-    bold: { fontFamily: 'System', fontWeight: '700' },
-    heavy: { fontFamily: 'System', fontWeight: '900' },
+    regular: { fontFamily: Platform.OS === 'android' ? 'Syne-Regular' : 'Syne-Regular', fontWeight: '400' },
+    medium: { fontFamily: Platform.OS === 'android' ? 'Syne-Medium' : 'Syne-Medium', fontWeight: '500' },
+    bold: { fontFamily: Platform.OS === 'android' ? 'Syne-Bold' : 'Syne-Bold', fontWeight: '700' },
+    heavy: { fontFamily: Platform.OS === 'android' ? 'Syne-Bold' : 'Syne-Bold', fontWeight: '900' },
   },
 };
 
@@ -53,10 +53,8 @@ function AppNavigator() {
       }}
     >
       {user ? (
-        // Logged in → straight to Main (ConnectBank accessible from Main if needed)
         <Stack.Screen name="Main" component={MainTabs} />
       ) : (
-        // Not logged in → Splash → Auth → ConnectBank → Main
         <>
           <Stack.Screen name="Splash" component={SplashScreen} />
           <Stack.Screen name="Auth" component={AuthScreen} />
@@ -107,6 +105,7 @@ const styles = StyleSheet.create({
   loadingLogoText: {
     color: '#fff',
     fontSize: 36,
+    fontFamily: 'Syne-Bold',
     fontWeight: '700',
   },
 });

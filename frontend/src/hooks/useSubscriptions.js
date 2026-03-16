@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { subscriptionAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const MOCK_ACTIVE = [
   { name: 'Netflix', amount: 649, renewalDate: 'Nov 15', icon: '🎬', color: '#e50914' },
@@ -15,6 +16,7 @@ const MOCK_FORGOTTEN = [
 ];
 
 export const useSubscriptions = () => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeSubscriptions, setActiveSubscriptions] = useState(MOCK_ACTIVE);
@@ -27,14 +29,26 @@ export const useSubscriptions = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const scribeRes = await subscriptionAPI.initScribeUp();
+      setLoading(true);
+      const scribeRes = await subscriptionAPI.initScribeUp({
+        user_id: user?.uid,
+        email: user?.email,
+        first_name: user?.displayName?.split(' ')[0] || '',
+        last_name: user?.displayName?.split(' ').slice(1).join(' ') || '',
+      });
       if (scribeRes.data?.url) {
         setScribeUpUrl(scribeRes.data.url);
       }
     } catch (err) {
       // Use mock data
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [user]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

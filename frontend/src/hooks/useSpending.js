@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { plaidAPI, aiAPI } from '../services/api';
 
 const MOCK_DAILY = [
@@ -27,6 +27,8 @@ const MOCK_SUGGESTIONS = [
 
 const MOCK_HEATMAP = Array.from({ length: 28 }, () => Math.floor(Math.random() * 3000));
 
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 export const useSpending = () => {
   const [selectedMonth, setSelectedMonth] = useState(9);
   const [loading, setLoading] = useState(false);
@@ -40,24 +42,49 @@ export const useSpending = () => {
 
   const fetchData = useCallback(async () => {
     try {
+      setLoading(true);
       const [txRes, aiRes] = await Promise.allSettled([
         plaidAPI.getTransactions(),
         aiAPI.getInsights(),
       ]);
 
-      if (txRes.status === 'fulfilled' && txRes.value?.data?.transactions) {
-        const txs = txRes.value.data.transactions;
-        const catMap = {};
-        txs.forEach((tx) => {
-          const cat = tx.category || 'Other';
-          catMap[cat] = (catMap[cat] || 0) + Math.abs(tx.amount || 0);
-        });
-        const cats = Object.entries(catMap).map(([name, amount], idx) => ({
-          name,
-          amount,
-          color: ['#7c6aff', '#4effd6', '#ffd166', '#ff6b6b', '#a78bfa'][idx % 5],
-        }));
-        if (cats.length > 0) setCategoryBreakdown(cats);
+      if (txRes.status === 'fulfilled' && txRes.value?.data) {
+        const txs = txRes.value.data.transactions || [];
+        if (txs.length > 0) {
+          const catMap = {};
+          const dailyMap = {};
+          const catColors = ['#7c6aff', '#4effd6', '#ffd166', '#ff6b6b', '#a78bfa'];
+
+          txs.forEach((tx) => {
+            const cat = tx.category || 'Other';
+            const amount = Math.abs(tx.amount || 0);
+            catMap[cat] = (catMap[cat] || 0) + amount;
+
+            const dayName = DAY_NAMES[new Date(tx.date).getDay()];
+            dailyMap[dayName] = (dailyMap[dayName] || 0) + amount;
+          });
+
+          const cats = Object.entries(catMap)
+            .sort(([, a], [, b]) => b - a)
+            .map(([name, amount], idx) => ({
+              name,
+              amount: Math.round(amount),
+              color: catColors[idx % catColors.length],
+            }));
+          if (cats.length > 0) setCategoryBreakdown(cats);
+
+          const dailyArr = DAY_NAMES.slice(1).concat(DAY_NAMES[0]).map((day) => {
+            const amt = Math.round(dailyMap[day] || 0);
+            return { day, amount: amt, isHigh: false };
+          });
+          const maxDay = Math.max(...dailyArr.map((d) => d.amount));
+          dailyArr.forEach((d) => { if (d.amount === maxDay && maxDay > 0) d.isHigh = true; });
+          if (dailyArr.some((d) => d.amount > 0)) setDailyData(dailyArr);
+
+          const heatmap = txs.slice(0, 28).map((tx) => Math.abs(tx.amount || 0));
+          while (heatmap.length < 28) heatmap.push(0);
+          setHeatmapData(heatmap);
+        }
       }
 
       if (aiRes.status === 'fulfilled' && aiRes.value?.data?.suggestions) {
@@ -65,8 +92,14 @@ export const useSpending = () => {
       }
     } catch (err) {
       // Use mock data
+    } finally {
+      setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

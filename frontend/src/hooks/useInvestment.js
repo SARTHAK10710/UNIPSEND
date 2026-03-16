@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { investmentAPI, userAPI } from '../services/api';
 
 const MOCK_PORTFOLIO = {
@@ -30,6 +30,11 @@ const MOCK_MOVERS = [
   { symbol: 'ITC', price: '465.80', change: -0.5, icon: '🏢' },
 ];
 
+const SYMBOL_ICONS = {
+  SPY: '📊', AAPL: '🍎', 'RELIANCE.BSE': '🏭', 'TCS.BSE': '💻',
+  'NIFTYBEES.BSE': '📈', BTC: '₿',
+};
+
 export const useInvestment = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,31 +47,75 @@ export const useInvestment = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [portfolioRes, riskRes] = await Promise.allSettled([
+      setLoading(true);
+      const [portfolioRes, accountRes, riskRes, moversRes] = await Promise.allSettled([
         investmentAPI.getPortfolio(),
+        investmentAPI.getAccount(),
         userAPI.getRiskScore(),
+        investmentAPI.getMovers(),
       ]);
 
-      if (portfolioRes.status === 'fulfilled' && portfolioRes.value?.data) {
-        const data = portfolioRes.value.data;
-        if (data.totalValue) setPortfolio(data);
-        if (data.holdings) setHoldings(data.holdings);
-        if (data.allocation) setAllocation(data.allocation);
+      if (accountRes.status === 'fulfilled' && accountRes.value?.data) {
+        const acc = accountRes.value.data;
+        setPortfolio({
+          totalValue: (acc.portfolioValue || 0).toLocaleString(),
+          todayReturn: (acc.dayPnl || 0).toLocaleString(),
+          todayReturnPct: acc.portfolioValue
+            ? ((acc.dayPnl / acc.portfolioValue) * 100).toFixed(2)
+            : '0.00',
+        });
+      }
+
+      if (portfolioRes.status === 'fulfilled' && portfolioRes.value?.data?.holdings) {
+        const h = portfolioRes.value.data.holdings;
+        if (h.length > 0) {
+          const formattedHoldings = h.map((pos) => ({
+            symbol: pos.symbol,
+            name: pos.symbol,
+            price: (pos.currentPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+            change: pos.unrealizedPnlPercent ? (pos.unrealizedPnlPercent * 100).toFixed(2) : 0,
+            icon: SYMBOL_ICONS[pos.symbol] || '📊',
+            qty: pos.qty,
+            marketValue: pos.marketValue,
+            pnl: pos.unrealizedPnl,
+          }));
+          setHoldings(formattedHoldings);
+        }
       }
 
       if (riskRes.status === 'fulfilled' && riskRes.value?.data) {
         const data = riskRes.value.data;
-        if (data.score !== undefined) {
-          setRiskScore(data.score);
-          setRiskLabel(
-            data.score < 40 ? 'Conservative' : data.score < 70 ? 'Moderate Risk' : 'Aggressive'
-          );
+        if (data.risk_score !== undefined) {
+          setRiskScore(data.risk_score);
+          setRiskLabel(data.label || (
+            data.risk_score < 34 ? 'Conservative' : data.risk_score < 67 ? 'Moderate Risk' : 'Aggressive'
+          ));
+        }
+      }
+
+      if (moversRes.status === 'fulfilled' && moversRes.value?.data) {
+        const data = moversRes.value.data;
+        const allMovers = [...(data.gainers || []), ...(data.losers || [])];
+        if (allMovers.length > 0) {
+          const formatted = allMovers.map((m) => ({
+            symbol: m.symbol,
+            price: (m.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+            change: parseFloat(m.changePercent) || 0,
+            icon: SYMBOL_ICONS[m.symbol] || '📊',
+          }));
+          setMarketMovers(formatted);
         }
       }
     } catch (err) {
       // Use mock data
+    } finally {
+      setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const placeOrder = useCallback(async (orderData) => {
     const response = await investmentAPI.placeOrder(orderData);
