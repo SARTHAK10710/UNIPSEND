@@ -1,14 +1,47 @@
+# -----------------------------
+# Node / Frontend / Build
+# -----------------------------
 node_modules/
+dist/
+build/
+coverage/
+frontend/android/app/build/
+frontend/android/.gradle/
+
+# -----------------------------
+# Python
+# -----------------------------
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# -----------------------------
+# Virtual environment
+# -----------------------------
+venv/
+env/
+
+# -----------------------------
+# Environment variables and Secrets
+# -----------------------------
 .env
 serviceAccountKey.json
 google-services.json
-.DS_Store
-coverage/
-dist/
-build/
-.vscode/
+
+# -----------------------------
+# Local data / caches
+# -----------------------------
+data/*.json
 *.log
-frontend/android/app/build/
-frontend/android/.gradle/
+
+# -----------------------------
+# OS files
+# -----------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# IDE
+# -----------------------------
+.vscode/

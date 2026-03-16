@@ -1,0 +1,9 @@
+{
+  "user_id": "user_1",
+  "transactions": [
+    {"category": "food", "amount": 250, "date": "2026-03-15"},
+    {"category": "transport", "amount": 120, "date": "2026-03-15"},
+    {"category": "shopping", "amount": 900, "date": "2026-03-14"},
+    {"category": "entertainment", "amount": 300, "date": "2026-03-13"}
+  ]
+}
