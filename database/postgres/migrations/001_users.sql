@@ -1,15 +1,14 @@
-CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
-  firebase_uid VARCHAR(128) UNIQUE NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  display_name VARCHAR(100),
-  phone VARCHAR(20),
-  currency VARCHAR(3) DEFAULT 'INR',
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  firebase_uid VARCHAR UNIQUE NOT NULL,
+  email VARCHAR NOT NULL,
+  first_name VARCHAR,
+  last_name VARCHAR,
+  plaid_access_token VARCHAR,
+  plaid_item_id VARCHAR,
   risk_score INTEGER DEFAULT 0,
-  monthly_income NUMERIC(12,2) DEFAULT 0,
+  segment VARCHAR DEFAULT 'balanced',
+  fcm_token VARCHAR,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
-
-CREATE INDEX idx_users_firebase_uid ON users(firebase_uid);
-CREATE INDEX idx_users_email ON users(email);

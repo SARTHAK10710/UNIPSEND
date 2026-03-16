@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { PlaidLink } from 'react-native-plaid-link-sdk';
-import { useAuth } from '../context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 
 const createLinkToken = () => api.post('/plaid/link-token');
@@ -25,7 +25,6 @@ const POPULAR_BANKS = [
 ];
 
 const ConnectBankScreen = ({ navigation }) => {
-  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isExchanging, setIsExchanging] = useState(false);
   const [selectedBank, setSelectedBank] = useState(null);
@@ -60,6 +59,7 @@ const ConnectBankScreen = ({ navigation }) => {
       setErrorMessage(null);
       try {
         await exchangeToken(success.publicToken);
+        await AsyncStorage.setItem('bankSetupCompleted', 'true');
         navigation.replace('Main');
       } catch (err) {
         setIsExchanging(false);
@@ -83,7 +83,8 @@ const ConnectBankScreen = ({ navigation }) => {
     []
   );
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    await AsyncStorage.setItem('bankSetupCompleted', 'true');
     navigation.replace('Main');
   };
 

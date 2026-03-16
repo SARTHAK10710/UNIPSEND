@@ -1,24 +1,29 @@
 const admin = require('firebase-admin');
 
-/**
- * Middleware to verify a Firebase ID Token.
- * Attaches the decoded user to the `req.user` object.
- */
 const verifyToken = async (req, res, next) => {
-  const authorizationHeader = req.headers.authorization;
+  const authHeader = req.headers.authorization;
 
-  if (!authorizationHeader || !authorizationHeader.startsWith('Bearer ')) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: No token provided' });
   }
 
-  const idToken = authorizationHeader.split('Bearer ')[1];
+  const idToken = authHeader.split('Bearer ')[1];
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    req.user = decodedToken;
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    req.user = {
+      uid: decoded.uid,
+      email: decoded.email || null,
+      name: decoded.name || decoded.displayName || null,
+    };
     next();
   } catch (error) {
-    console.error('Error verifying Firebase ID token:', error);
+    console.error('Token verification failed:', error.code || error.message);
+
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({ error: 'Token expired, please refresh' });
+    }
+
     return res.status(403).json({ error: 'Unauthorized: Invalid token' });
   }
 };

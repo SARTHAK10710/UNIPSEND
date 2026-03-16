@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
-  getAuth,
+  initializeAuth,
+  getReactNativePersistence,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
@@ -19,7 +20,9 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage),
+});
 
 const AuthContext = createContext({});
 
@@ -40,6 +43,7 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         setToken(null);
         await AsyncStorage.removeItem('authToken');
+        await AsyncStorage.removeItem('bankSetupCompleted');
       }
       setLoading(false);
     });
@@ -104,6 +108,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setToken(null);
       await AsyncStorage.removeItem('authToken');
+      await AsyncStorage.removeItem('bankSetupCompleted');
     } catch (err) {
       setError(err.message);
     }

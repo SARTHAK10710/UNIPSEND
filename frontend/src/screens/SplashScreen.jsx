@@ -11,6 +11,7 @@ import {
   Image,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -65,16 +66,21 @@ const SplashScreen = ({ navigation }) => {
 
   const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
+  const goToAuth = async () => {
+    await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+    navigation.replace('Auth');
+  };
+
   const handleNext = () => {
     if (currentIndex < SLIDES.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
     } else {
-      navigation.replace('Auth');
+      goToAuth();
     }
   };
 
   const handleSkip = () => {
-    navigation.replace('Auth');
+    goToAuth();
   };
 
   const renderSlide = ({ item, index }) => (
@@ -150,7 +156,7 @@ const SplashScreen = ({ navigation }) => {
       </TouchableOpacity>
 
       {index === SLIDES.length - 1 && (
-        <TouchableOpacity onPress={() => navigation.replace('Auth')} style={styles.loginLink}>
+        <TouchableOpacity onPress={goToAuth} style={styles.loginLink}>
           <Text style={styles.loginText}>
             Already have an account? <Text style={styles.loginHighlight}>Log in</Text>
           </Text>

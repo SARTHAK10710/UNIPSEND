@@ -35,8 +35,8 @@ const AuthScreen = ({ navigation }) => {
         await login(email, password);
       } else {
         await register(email, password);
+        navigation.navigate('ConnectBank');
       }
-      navigation.replace('ConnectBank');
     } catch (err) {
       Alert.alert('Authentication Error', err.message);
     } finally {

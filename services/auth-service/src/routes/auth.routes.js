@@ -1,81 +1,92 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const admin = require('firebase-admin');
-const verifyToken = require('../middleware/verifyToken');
+const admin = require("firebase-admin");
+const verifyToken = require("../middleware/verifyToken");
 
-// POST /api/auth/register — after Firebase signup, create user in DB
-router.post('/register', verifyToken, async (req, res) => {
+// POST /auth/register — create user in postgres after Firebase signup
+router.post("/register", verifyToken, async (req, res) => {
   try {
     const { uid, email } = req.user;
-    const { displayName, phone, currency, monthlyIncome } = req.body;
+    const { firstName, lastName } = req.body;
 
-    const existing = await req.db.query('SELECT id FROM users WHERE firebase_uid = $1', [uid]);
+    const existing = await req.db.query(
+      "SELECT * FROM users WHERE firebase_uid = $1",
+      [uid],
+    );
+
     if (existing.rows.length > 0) {
-      return res.status(409).json({ error: 'User already exists' });
+      return res.status(200).json({
+        message: "User already registered",
+        user: existing.rows[0],
+      });
     }
 
     const result = await req.db.query(
-      `INSERT INTO users (firebase_uid, email, display_name, phone, currency, monthly_income)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO users (firebase_uid, email, first_name, last_name)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [uid, email, displayName || null, phone || null, currency || 'INR', monthlyIncome || 0]
+      [uid, email, firstName || null, lastName || null],
     );
 
-    res.status(201).json({ message: 'User registered', user: result.rows[0] });
+    res.status(201).json({ message: "User registered", user: result.rows[0] });
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    console.error("Register error:", error);
+    res.status(500).json({ error: "Registration failed" });
   }
 });
 
-// GET /api/auth/me — get current user profile
-router.get('/me', verifyToken, async (req, res) => {
+// GET /auth/me — get current user profile
+router.get("/me", verifyToken, async (req, res) => {
   try {
     const { uid } = req.user;
 
-    const result = await req.db.query('SELECT * FROM users WHERE firebase_uid = $1', [uid]);
+    const result = await req.db.query(
+      "SELECT * FROM users WHERE firebase_uid = $1",
+      [uid],
+    );
+
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found in database' });
+      return res.status(404).json({ error: "User not found" });
     }
 
     res.status(200).json({ user: result.rows[0] });
   } catch (error) {
-    console.error('Get user error:', error);
-    res.status(500).json({ error: 'Failed to fetch user' });
+    console.error("Get user error:", error);
+    res.status(500).json({ error: "Failed to fetch user" });
   }
 });
 
-// PUT /api/auth/me — update user profile
-router.put('/me', verifyToken, async (req, res) => {
+// PUT /auth/me — update user profile
+router.put("/me", verifyToken, async (req, res) => {
   try {
     const { uid } = req.user;
-    const { displayName, phone, currency, monthlyIncome } = req.body;
+    const { firstName, lastName, fcmToken, segment } = req.body;
 
     const result = await req.db.query(
       `UPDATE users
-       SET display_name = COALESCE($1, display_name),
-           phone = COALESCE($2, phone),
-           currency = COALESCE($3, currency),
-           monthly_income = COALESCE($4, monthly_income),
+       SET first_name = COALESCE($1, first_name),
+           last_name = COALESCE($2, last_name),
+           fcm_token = COALESCE($3, fcm_token),
+           segment = COALESCE($4, segment),
            updated_at = NOW()
        WHERE firebase_uid = $5
        RETURNING *`,
-      [displayName, phone, currency, monthlyIncome, uid]
+      [firstName, lastName, fcmToken, segment, uid],
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
 
-    res.status(200).json({ message: 'Profile updated', user: result.rows[0] });
+    res.status(200).json({ message: "Profile updated", user: result.rows[0] });
   } catch (error) {
-    console.error('Update user error:', error);
-    res.status(500).json({ error: 'Failed to update profile' });
+    console.error("Update user error:", error);
+    res.status(500).json({ error: "Failed to update profile" });
   }
 });
 
-// POST /api/auth/verify — just verify a token is valid
-router.post('/verify', verifyToken, (req, res) => {
+// POST /auth/verify — check if token is valid
+router.post("/verify", verifyToken, (req, res) => {
   res.status(200).json({
     valid: true,
     uid: req.user.uid,
@@ -83,18 +94,18 @@ router.post('/verify', verifyToken, (req, res) => {
   });
 });
 
-// DELETE /api/auth/me — delete user account
-router.delete('/me', verifyToken, async (req, res) => {
+// DELETE /auth/account — delete user from Firebase + postgres
+router.delete("/account", verifyToken, async (req, res) => {
   try {
     const { uid } = req.user;
 
-    await req.db.query('DELETE FROM users WHERE firebase_uid = $1', [uid]);
+    await req.db.query("DELETE FROM users WHERE firebase_uid = $1", [uid]);
     await admin.auth().deleteUser(uid);
 
-    res.status(200).json({ message: 'Account deleted' });
+    res.status(200).json({ message: "Account deleted successfully" });
   } catch (error) {
-    console.error('Delete user error:', error);
-    res.status(500).json({ error: 'Failed to delete account' });
+    console.error("Delete account error:", error);
+    res.status(500).json({ error: "Failed to delete account" });
   }
 });
 

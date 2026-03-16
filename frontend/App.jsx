@@ -10,8 +10,7 @@ import AuthScreen from './src/screens/AuthScreen';
 import ConnectBankScreen from './src/screens/ConnectBankScreen';
 import MainTabs from './src/navigation/MainTabs';
 
-const AuthStack = createNativeStackNavigator();
-const RootStack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator();
 
 const darkTheme = {
   dark: true,
@@ -23,23 +22,13 @@ const darkTheme = {
     border: 'rgba(255,255,255,0.06)',
     notification: '#ff6b6b',
   },
+  fonts: {
+    regular: { fontFamily: 'System', fontWeight: '400' },
+    medium: { fontFamily: 'System', fontWeight: '500' },
+    bold: { fontFamily: 'System', fontWeight: '700' },
+    heavy: { fontFamily: 'System', fontWeight: '900' },
+  },
 };
-
-function AuthStackNavigator() {
-  return (
-    <AuthStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: '#0a0a0f' },
-        animation: 'slide_from_right',
-      }}
-    >
-      <AuthStack.Screen name="Splash" component={SplashScreen} />
-      <AuthStack.Screen name="Auth" component={AuthScreen} />
-      <AuthStack.Screen name="ConnectBank" component={ConnectBankScreen} />
-    </AuthStack.Navigator>
-  );
-}
 
 function AppNavigator() {
   const { user, loading } = useAuth();
@@ -56,19 +45,25 @@ function AppNavigator() {
   }
 
   return (
-    <RootStack.Navigator
+    <Stack.Navigator
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: '#0a0a0f' },
-        animation: 'fade',
+        animation: 'slide_from_right',
       }}
     >
       {user ? (
-        <RootStack.Screen name="Main" component={MainTabs} />
+        // Logged in → straight to Main (ConnectBank accessible from Main if needed)
+        <Stack.Screen name="Main" component={MainTabs} />
       ) : (
-        <RootStack.Screen name="AuthFlow" component={AuthStackNavigator} />
+        // Not logged in → Splash → Auth → ConnectBank → Main
+        <>
+          <Stack.Screen name="Splash" component={SplashScreen} />
+          <Stack.Screen name="Auth" component={AuthScreen} />
+          <Stack.Screen name="ConnectBank" component={ConnectBankScreen} />
+        </>
       )}
-    </RootStack.Navigator>
+    </Stack.Navigator>
   );
 }
 
@@ -113,6 +108,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 36,
     fontWeight: '700',
-    fontFamily: 'Syne-Bold',
   },
 });

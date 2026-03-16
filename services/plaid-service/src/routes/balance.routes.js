@@ -1,31 +1,29 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const plaidClient = require('../plaidClient');
+const plaidClient = require("../plaidClient");
 
-// GET /api/plaid/balance/:userId — get account balances
-router.get('/:userId', async (req, res) => {
+// GET /api/plaid/balance/:firebaseUid — get account balances
+router.get("/:firebaseUid", async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { firebaseUid } = req.params;
 
-    const itemResult = await req.db.query(
-      'SELECT access_token FROM plaid_items WHERE user_id = $1',
-      [userId]
+    const userResult = await req.db.query(
+      "SELECT plaid_access_token FROM users WHERE firebase_uid = $1",
+      [firebaseUid],
     );
 
-    if (itemResult.rows.length === 0) {
-      return res.status(404).json({ error: 'No linked bank account found' });
+    if (
+      userResult.rows.length === 0 ||
+      !userResult.rows[0].plaid_access_token
+    ) {
+      return res.status(404).json({ error: "No linked bank account found" });
     }
 
-    let allAccounts = [];
+    const response = await plaidClient.accountsGet({
+      access_token: userResult.rows[0].plaid_access_token,
+    });
 
-    for (const item of itemResult.rows) {
-      const response = await plaidClient.accountsGet({
-        access_token: item.access_token,
-      });
-      allAccounts = allAccounts.concat(response.data.accounts);
-    }
-
-    const balances = allAccounts.map((acc) => ({
+    const balances = response.data.accounts.map((acc) => ({
       account_id: acc.account_id,
       name: acc.name,
       official_name: acc.official_name,
@@ -38,8 +36,8 @@ router.get('/:userId', async (req, res) => {
 
     res.status(200).json({ accounts: balances });
   } catch (error) {
-    console.error('Get balance error:', error.response?.data || error);
-    res.status(500).json({ error: 'Failed to fetch balances' });
+    console.error("Get balance error:", error.response?.data || error);
+    res.status(500).json({ error: "Failed to fetch balances" });
   }
 });
 
