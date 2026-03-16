@@ -9,9 +9,9 @@ services:
       - auth-service
       - plaid-service
       - investment-service
+      - subscription-service
       - notification-service
       - user-service
-      - ai-service
 
   auth-service:
     build: ./services/auth-service
@@ -20,6 +20,9 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=unispend
     depends_on:
       - postgres
 
@@ -30,6 +33,10 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=unispend
+      - REDIS_URL=redis://redis:6379
     depends_on:
       - postgres
       - redis
@@ -41,9 +48,26 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=unispend
+      - REDIS_URL=redis://redis:6379
     depends_on:
       - postgres
       - redis
+
+  subscription-service:
+    build: ./services/subscription-service
+    ports:
+      - "3004:3004"
+    env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=unispend
+    depends_on:
+      - postgres
 
   notification-service:
     build: ./services/notification-service
@@ -58,16 +82,11 @@ services:
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=unispend
     depends_on:
       - postgres
-
-  ai-service:
-    build: ./ai-service
-    ports:
-      - "8000:8000"
-    env_file: .env
-    depends_on:
-      - redis
 
   postgres:
     image: postgres:15
