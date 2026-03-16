@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { authAPI } from "../services/api";
 import {
   initializeAuth,
   getReactNativePersistence,
@@ -41,6 +42,10 @@ export const AuthProvider = ({ children }) => {
         setUser(firebaseUser);
         setToken(idToken);
         await AsyncStorage.setItem("authToken", idToken);
+
+        try {
+          await authAPI.register({});
+        } catch (e) {}
 
         // Check if bankSetupCompleted flag exists
         const bankSetupDone = await AsyncStorage.getItem("bankSetupCompleted");
@@ -89,6 +94,11 @@ export const AuthProvider = ({ children }) => {
       const idToken = await result.user.getIdToken();
       setToken(idToken);
       await AsyncStorage.setItem("authToken", idToken);
+      try {
+        await authAPI.register({});
+      } catch (regErr) {
+        console.warn("Backend register call failed:", regErr.message);
+      }
       return result.user;
     } catch (err) {
       setError(err.message);
@@ -107,6 +117,11 @@ export const AuthProvider = ({ children }) => {
       const firebaseToken = await result.user.getIdToken();
       setToken(firebaseToken);
       await AsyncStorage.setItem("authToken", firebaseToken);
+      try {
+        await authAPI.register({});
+      } catch (regErr) {
+        console.warn("Backend register call failed:", regErr.message);
+      }
       return result.user;
     } catch (err) {
       setError(err.message);

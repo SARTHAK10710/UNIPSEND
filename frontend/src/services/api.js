@@ -69,4 +69,8 @@ export const userAPI = {
   updateFcmToken: (token) => api.post("/api/user/fcm-token", { token }),
 };
 
+export const authAPI = {
+  register: (data) => api.post("/api/auth/register", data),
+};
+
 export default api;

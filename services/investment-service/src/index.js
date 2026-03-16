@@ -10,7 +10,6 @@ const admin = require('firebase-admin');
 
 dotenv.config({ path: require('path').resolve(__dirname, '../../../.env') });
 
-// Firebase Admin init
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -23,23 +22,20 @@ if (!admin.apps.length) {
 
 const verifyToken = require('./middleware/verifyToken');
 
-// Alpaca — ALWAYS paper trading
 const alpaca = new Alpaca({
   keyId: process.env.ALPACA_KEY_ID,
   secretKey: process.env.ALPACA_SECRET_KEY,
   paper: true,
 });
 
-// Redis
 const redis = new Redis(process.env.REDIS_URL || {
   host: process.env.REDIS_HOST || 'localhost',
   port: process.env.REDIS_PORT || 6379,
 });
-redis.on('connect', () => console.log('Redis connected'));
+redis.on('connect', () => console.log('✓ Redis connected'));
 redis.on('error', (err) => console.error('Redis error:', err.message));
 
-// Alpha Vantage config
-const AV_KEY = process.env.ALPHA_VANTAGE_KEY || process.env.ALPHA_VANTAGE_API_KEY;
+const AV_KEY = process.env.ALPHA_VANTAGE_KEY;
 const AV_BASE = 'https://www.alphavantage.co/query';
 
 const app = express();
@@ -60,242 +56,29 @@ const getCachedOrFetch = async (key, ttl, fetchFn) => {
   return fresh;
 };
 
-const checkAVRateLimit = async () => {
-  const key = 'av_calls_today';
-  const count = await redis.get(key);
-  if (count && parseInt(count) > 24) {
-    throw new Error('Market data limit reached, try again tomorrow');
-  }
-};
-
-const incrementAVCounter = async () => {
-  const key = 'av_calls_today';
-  const count = await redis.incr(key);
-  if (count === 1) {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(24, 0, 0, 0);
-    const secondsUntilMidnight = Math.floor((midnight - now) / 1000);
-    await redis.expire(key, secondsUntilMidnight);
-  }
-};
-
-const fetchFromAV = async (params) => {
-  await checkAVRateLimit();
-  await incrementAVCounter();
-
-  const response = await axios.get(AV_BASE, {
-    params: { ...params, apikey: AV_KEY },
+const fetchAVQuote = async (symbol) => {
+  const res = await axios.get(AV_BASE, {
+    params: { function: 'GLOBAL_QUOTE', symbol, apikey: AV_KEY },
   });
-
-  if (response.data['Error Message']) {
-    throw new Error(response.data['Error Message']);
-  }
-  if (response.data['Note']) {
-    throw new Error(response.data['Note']);
-  }
-
-  return response.data;
+  const quote = res.data['Global Quote'];
+  if (!quote || !quote['05. price']) return null;
+  return {
+    symbol: quote['01. symbol'],
+    price: parseFloat(quote['05. price']),
+    change: parseFloat(quote['09. change']),
+    changePercent: quote['10. change percent'],
+    high: parseFloat(quote['03. high']),
+    low: parseFloat(quote['04. low']),
+    volume: parseInt(quote['06. volume']),
+  };
 };
-
-// ─── ALPHA VANTAGE ROUTES ───────────────────────────────
-
-// GET /investments/market/price/:symbol
-app.get('/investments/market/price/:symbol', verifyToken, async (req, res) => {
-  try {
-    const { symbol } = req.params;
-    const cacheKey = `price:${symbol}`;
-
-    const data = await getCachedOrFetch(cacheKey, 300, async () => {
-      const raw = await fetchFromAV({ function: 'GLOBAL_QUOTE', symbol });
-      const quote = raw['Global Quote'];
-
-      if (!quote || !quote['05. price']) {
-        throw new Error('Quote not found for symbol');
-      }
-
-      return {
-        symbol: quote['01. symbol'],
-        price: parseFloat(quote['05. price']),
-        change: parseFloat(quote['09. change']),
-        changePercent: quote['10. change percent'],
-        high: parseFloat(quote['03. high']),
-        low: parseFloat(quote['04. low']),
-        volume: parseInt(quote['06. volume']),
-      };
-    });
-
-    res.status(200).json(data);
-  } catch (error) {
-    console.error('Get market price error:', error.message);
-    if (error.message.includes('limit reached')) {
-      return res.status(429).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to fetch market price' });
-  }
-});
-
-// GET /investments/market/history/:symbol
-app.get('/investments/market/history/:symbol', verifyToken, async (req, res) => {
-  try {
-    const { symbol } = req.params;
-    const cacheKey = `history:${symbol}`;
-
-    const data = await getCachedOrFetch(cacheKey, 3600, async () => {
-      const raw = await fetchFromAV({
-        function: 'TIME_SERIES_DAILY',
-        symbol,
-        outputsize: 'compact',
-      });
-
-      const timeSeries = raw['Time Series (Daily)'];
-      if (!timeSeries) {
-        throw new Error('History not found for symbol');
-      }
-
-      return Object.entries(timeSeries).map(([date, values]) => ({
-        date,
-        open: parseFloat(values['1. open']),
-        high: parseFloat(values['2. high']),
-        low: parseFloat(values['3. low']),
-        close: parseFloat(values['4. close']),
-        volume: parseInt(values['5. volume']),
-      }));
-    });
-
-    res.status(200).json(data);
-  } catch (error) {
-    console.error('Get market history error:', error.message);
-    if (error.message.includes('limit reached')) {
-      return res.status(429).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to fetch market history' });
-  }
-});
-
-// GET /investments/market/search/:query
-app.get('/investments/market/search/:query', verifyToken, async (req, res) => {
-  try {
-    const { query } = req.params;
-    const cacheKey = `search:${query}`;
-
-    const data = await getCachedOrFetch(cacheKey, 86400, async () => {
-      const raw = await fetchFromAV({
-        function: 'SYMBOL_SEARCH',
-        keywords: query,
-      });
-
-      const matches = raw['bestMatches'] || [];
-
-      return matches.map((m) => ({
-        symbol: m['1. symbol'],
-        name: m['2. name'],
-        type: m['3. type'],
-        region: m['4. region'],
-      }));
-    });
-
-    res.status(200).json(data);
-  } catch (error) {
-    console.error('Search symbols error:', error.message);
-    if (error.message.includes('limit reached')) {
-      return res.status(429).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to search symbols' });
-  }
-});
-
-// GET /investments/market/movers
-app.get('/investments/market/movers', verifyToken, async (req, res) => {
-  try {
-    const symbols = ['SPY', 'AAPL', 'RELIANCE.BSE', 'TCS.BSE', 'NIFTYBEES.BSE', 'BTC'];
-    const cacheKey = 'market:movers';
-
-    const data = await getCachedOrFetch(cacheKey, 300, async () => {
-      const results = [];
-
-      for (const symbol of symbols) {
-        try {
-          const priceKey = `price:${symbol}`;
-          const priceData = await getCachedOrFetch(priceKey, 300, async () => {
-            const raw = await fetchFromAV({ function: 'GLOBAL_QUOTE', symbol });
-            const quote = raw['Global Quote'];
-            if (!quote || !quote['05. price']) return null;
-
-            return {
-              symbol: quote['01. symbol'],
-              price: parseFloat(quote['05. price']),
-              change: parseFloat(quote['09. change']),
-              changePercent: quote['10. change percent'],
-              high: parseFloat(quote['03. high']),
-              low: parseFloat(quote['04. low']),
-              volume: parseInt(quote['06. volume']),
-            };
-          });
-
-          if (priceData) results.push(priceData);
-        } catch (err) {
-          console.error(`Failed to fetch mover ${symbol}:`, err.message);
-        }
-      }
-
-      results.sort((a, b) => {
-        const aVal = parseFloat(a.changePercent) || 0;
-        const bVal = parseFloat(b.changePercent) || 0;
-        return bVal - aVal;
-      });
-
-      return {
-        gainers: results.filter((r) => parseFloat(r.changePercent) > 0),
-        losers: results.filter((r) => parseFloat(r.changePercent) <= 0),
-      };
-    });
-
-    res.status(200).json(data);
-  } catch (error) {
-    console.error('Get market movers error:', error.message);
-    if (error.message.includes('limit reached')) {
-      return res.status(429).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to fetch market movers' });
-  }
-});
 
 // ─── ALPACA ROUTES ──────────────────────────────────────
-
-// GET /investments/portfolio
-app.get('/investments/portfolio', verifyToken, async (req, res) => {
-  try {
-    const positions = await alpaca.getPositions();
-
-    const holdings = positions.map((pos) => ({
-      symbol: pos.symbol,
-      qty: parseFloat(pos.qty),
-      avgEntryPrice: parseFloat(pos.avg_entry_price),
-      currentPrice: parseFloat(pos.current_price),
-      marketValue: parseFloat(pos.market_value),
-      unrealizedPnl: parseFloat(pos.unrealized_pl),
-      unrealizedPnlPercent: parseFloat(pos.unrealized_plpc),
-      side: pos.side,
-    }));
-
-    res.status(200).json({ holdings });
-  } catch (error) {
-    console.error('Get portfolio error:', error.message);
-    res.status(200).json({
-      holdings: [],
-      portfolioValue: 0,
-      buyingPower: 0,
-      message: 'Connect Alpaca account to view portfolio',
-    });
-  }
-});
 
 // GET /investments/account
 app.get('/investments/account', verifyToken, async (req, res) => {
   try {
     const account = await alpaca.getAccount();
-
     res.status(200).json({
       portfolioValue: parseFloat(account.portfolio_value),
       buyingPower: parseFloat(account.buying_power),
@@ -304,7 +87,7 @@ app.get('/investments/account', verifyToken, async (req, res) => {
       totalPnl: parseFloat(account.equity) - parseFloat(account.cash),
     });
   } catch (error) {
-    console.error('Get Alpaca account error:', error.message);
+    console.error('Get account error:', error.message);
     res.status(200).json({
       portfolioValue: 0,
       buyingPower: 0,
@@ -316,6 +99,49 @@ app.get('/investments/account', verifyToken, async (req, res) => {
   }
 });
 
+// GET /investments/portfolio
+app.get('/investments/portfolio', verifyToken, async (req, res) => {
+  try {
+    const positions = await alpaca.getPositions();
+    const holdings = positions.map((pos) => ({
+      symbol: pos.symbol,
+      qty: parseFloat(pos.qty),
+      avgEntryPrice: parseFloat(pos.avg_entry_price),
+      currentPrice: parseFloat(pos.current_price),
+      marketValue: parseFloat(pos.market_value),
+      unrealizedPnl: parseFloat(pos.unrealized_pl),
+      unrealizedPnlPercent: parseFloat(pos.unrealized_plpc),
+      side: pos.side,
+    }));
+    res.status(200).json({ holdings });
+  } catch (error) {
+    console.error('Get portfolio error:', error.message);
+    res.status(200).json({ holdings: [] });
+  }
+});
+
+// GET /investments/orders
+app.get('/investments/orders', verifyToken, async (req, res) => {
+  try {
+    const orders = await alpaca.getOrders({ status: 'all', limit: 20 });
+    const formatted = orders.map((o) => ({
+      orderId: o.id,
+      symbol: o.symbol,
+      qty: parseFloat(o.qty),
+      side: o.side,
+      type: o.type,
+      status: o.status,
+      filledAt: o.filled_at,
+      submittedAt: o.submitted_at,
+      filledAvgPrice: o.filled_avg_price ? parseFloat(o.filled_avg_price) : null,
+    }));
+    res.status(200).json({ orders: formatted });
+  } catch (error) {
+    console.error('Get orders error:', error.message);
+    res.status(200).json({ orders: [] });
+  }
+});
+
 // POST /investments/order
 app.post('/investments/order', verifyToken, async (req, res) => {
   try {
@@ -324,11 +150,9 @@ app.post('/investments/order', verifyToken, async (req, res) => {
     if (!symbol || !qty || !side) {
       return res.status(400).json({ error: 'symbol, qty, and side are required' });
     }
-
     if (!['buy', 'sell'].includes(side)) {
       return res.status(400).json({ error: 'side must be "buy" or "sell"' });
     }
-
     if (qty <= 0) {
       return res.status(400).json({ error: 'qty must be greater than 0' });
     }
@@ -355,27 +179,115 @@ app.post('/investments/order', verifyToken, async (req, res) => {
   }
 });
 
-// GET /investments/orders
-app.get('/investments/orders', verifyToken, async (req, res) => {
+// ─── ALPHA VANTAGE / MARKET ROUTES ──────────────────────
+
+// GET /investments/market/price/:symbol
+app.get('/investments/market/price/:symbol', verifyToken, async (req, res) => {
   try {
-    const orders = await alpaca.getOrders({ status: 'all', limit: 20 });
+    const { symbol } = req.params;
+    const cacheKey = `price:${symbol}`;
 
-    const formatted = orders.map((o) => ({
-      orderId: o.id,
-      symbol: o.symbol,
-      qty: parseFloat(o.qty),
-      side: o.side,
-      type: o.type,
-      status: o.status,
-      filledAt: o.filled_at,
-      submittedAt: o.submitted_at,
-      filledAvgPrice: o.filled_avg_price ? parseFloat(o.filled_avg_price) : null,
-    }));
+    const data = await getCachedOrFetch(cacheKey, 300, async () => {
+      const quote = await fetchAVQuote(symbol);
+      if (!quote) return { symbol, price: 0, change: 0, changePercent: '0%' };
+      return quote;
+    });
 
-    res.status(200).json({ orders: formatted });
+    res.status(200).json(data);
   } catch (error) {
-    console.error('Get orders error:', error.message);
-    res.status(200).json({ orders: [], message: 'Connect Alpaca account to view orders' });
+    console.error('Get market price error:', error.message);
+    res.status(200).json({ symbol: req.params.symbol, price: 0, change: 0, changePercent: '0%' });
+  }
+});
+
+// GET /investments/market/history/:symbol
+app.get('/investments/market/history/:symbol', verifyToken, async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const cacheKey = `history:${symbol}`;
+
+    const data = await getCachedOrFetch(cacheKey, 3600, async () => {
+      const response = await axios.get(AV_BASE, {
+        params: { function: 'TIME_SERIES_DAILY', symbol, outputsize: 'compact', apikey: AV_KEY },
+      });
+
+      const timeSeries = response.data['Time Series (Daily)'];
+      if (!timeSeries) return [];
+
+      return Object.entries(timeSeries)
+        .slice(0, 30)
+        .map(([date, values]) => ({
+          date,
+          open: parseFloat(values['1. open']),
+          high: parseFloat(values['2. high']),
+          low: parseFloat(values['3. low']),
+          close: parseFloat(values['4. close']),
+          volume: parseInt(values['5. volume']),
+        }));
+    });
+
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Get market history error:', error.message);
+    res.status(200).json([]);
+  }
+});
+
+// GET /investments/market/movers
+app.get('/investments/market/movers', verifyToken, async (req, res) => {
+  try {
+    const symbols = ['SPY', 'AAPL', 'RELIANCE.BSE', 'TCS.BSE', 'BTC'];
+    const cacheKey = 'market:movers';
+
+    const data = await getCachedOrFetch(cacheKey, 300, async () => {
+      const results = [];
+      for (const symbol of symbols) {
+        try {
+          const priceKey = `price:${symbol}`;
+          const quote = await getCachedOrFetch(priceKey, 300, () => fetchAVQuote(symbol));
+          if (quote && quote.price) results.push(quote);
+        } catch (err) {
+          console.error(`Failed to fetch mover ${symbol}:`, err.message);
+        }
+      }
+      results.sort((a, b) => {
+        const aVal = parseFloat(a.changePercent) || 0;
+        const bVal = parseFloat(b.changePercent) || 0;
+        return bVal - aVal;
+      });
+      return results;
+    });
+
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Get market movers error:', error.message);
+    res.status(200).json([]);
+  }
+});
+
+// GET /investments/market/search/:query
+app.get('/investments/market/search/:query', verifyToken, async (req, res) => {
+  try {
+    const { query } = req.params;
+    const cacheKey = `search:${query}`;
+
+    const data = await getCachedOrFetch(cacheKey, 86400, async () => {
+      const response = await axios.get(AV_BASE, {
+        params: { function: 'SYMBOL_SEARCH', keywords: query, apikey: AV_KEY },
+      });
+      const matches = response.data['bestMatches'] || [];
+      return matches.map((m) => ({
+        symbol: m['1. symbol'],
+        name: m['2. name'],
+        type: m['3. type'],
+        region: m['4. region'],
+      }));
+    });
+
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Search symbols error:', error.message);
+    res.status(200).json([]);
   }
 });
 
@@ -386,32 +298,25 @@ app.get('/health', async (req, res) => {
   try {
     await redis.ping();
     redisStatus = 'connected';
-  } catch (e) {
-    redisStatus = 'disconnected';
-  }
+  } catch (e) {}
 
   res.status(200).json({
     status: 'ok',
-    alphaVantage: 'connected',
-    alpaca: 'paper trading',
+    service: 'investment-service',
     redis: redisStatus,
   });
 });
 
-// ─── 404 HANDLER ────────────────────────────────────────
+// ─── 404 + ERROR ────────────────────────────────────────
 
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
 });
-
-// ─── ERROR MIDDLEWARE ───────────────────────────────────
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
-
-// ─── START ──────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`Investment Service running on port ${PORT}`);

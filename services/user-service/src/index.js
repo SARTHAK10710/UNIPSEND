@@ -21,11 +21,12 @@ if (!admin.apps.length) {
 const verifyToken = require('./middleware/verifyToken');
 
 const pool = new Pool({
-  host: process.env.POSTGRES_HOST || 'localhost',
-  port: process.env.POSTGRES_PORT || 5432,
-  database: process.env.POSTGRES_DB || 'unispend',
-  user: process.env.POSTGRES_USER || 'admin',
-  password: process.env.POSTGRES_PASSWORD || 'password',
+  connectionString: process.env.POSTGRES_URL || undefined,
+  host: process.env.POSTGRES_URL ? undefined : (process.env.POSTGRES_HOST || 'localhost'),
+  port: process.env.POSTGRES_URL ? undefined : (parseInt(process.env.POSTGRES_PORT, 10) || 5432),
+  database: process.env.POSTGRES_URL ? undefined : (process.env.POSTGRES_DB || 'unispend'),
+  user: process.env.POSTGRES_URL ? undefined : (process.env.POSTGRES_USER || 'admin'),
+  password: process.env.POSTGRES_URL ? undefined : (process.env.POSTGRES_PASSWORD || 'password'),
 });
 
 const app = express();
@@ -36,27 +37,84 @@ app.use(helmet());
 app.use(morgan('dev'));
 app.use(express.json());
 
+const initDB = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        firebase_uid VARCHAR UNIQUE NOT NULL,
+        email VARCHAR NOT NULL,
+        first_name VARCHAR DEFAULT '',
+        last_name VARCHAR DEFAULT '',
+        plaid_access_token VARCHAR,
+        plaid_item_id VARCHAR,
+        risk_score INTEGER DEFAULT 50,
+        segment VARCHAR DEFAULT 'balanced',
+        fcm_token VARCHAR,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log('✓ Users table ready');
+  } catch (err) {
+    console.error('✗ Failed to create users table:', err.message);
+  }
+};
+
 function getRiskLabel(score) {
   if (score <= 33) return 'Conservative';
   if (score <= 66) return 'Moderate';
   return 'Aggressive';
 }
 
+// POST /auth/register
+app.post('/auth/register', verifyToken, async (req, res) => {
+  try {
+    const { uid, email } = req.user;
+
+    const result = await pool.query(
+      `INSERT INTO users (firebase_uid, email)
+       VALUES ($1, $2)
+       ON CONFLICT (firebase_uid) DO NOTHING
+       RETURNING *`,
+      [uid, email]
+    );
+
+    if (result.rows.length === 0) {
+      const existing = await pool.query(
+        'SELECT * FROM users WHERE firebase_uid = $1',
+        [uid]
+      );
+      return res.status(200).json({ message: 'User already registered', user: existing.rows[0] });
+    }
+
+    res.status(201).json({ message: 'User registered', user: result.rows[0] });
+  } catch (error) {
+    console.error('Register error:', error.message);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
 // GET /user/me
 app.get('/user/me', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query(
+    let result = await pool.query(
       'SELECT * FROM users WHERE firebase_uid = $1',
       [req.user.uid]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      result = await pool.query(
+        `INSERT INTO users (firebase_uid, email)
+         VALUES ($1, $2)
+         RETURNING *`,
+        [req.user.uid, req.user.email]
+      );
     }
 
     res.status(200).json(result.rows[0]);
   } catch (error) {
-    console.error('Get user error:', error);
+    console.error('Get user error:', error.message);
     res.status(500).json({ error: 'Failed to fetch user profile' });
   }
 });
@@ -82,7 +140,7 @@ app.put('/user/me', verifyToken, async (req, res) => {
 
     res.status(200).json(result.rows[0]);
   } catch (error) {
-    console.error('Update user error:', error);
+    console.error('Update user error:', error.message);
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
@@ -91,15 +149,13 @@ app.put('/user/me', verifyToken, async (req, res) => {
 app.post('/user/fcm-token', verifyToken, async (req, res) => {
   try {
     const { token } = req.body;
-
     await pool.query(
       'UPDATE users SET fcm_token = $1, updated_at = NOW() WHERE firebase_uid = $2',
       [token, req.user.uid]
     );
-
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Update FCM token error:', error);
+    console.error('Update FCM token error:', error.message);
     res.status(500).json({ error: 'Failed to update FCM token' });
   }
 });
@@ -117,23 +173,53 @@ app.get('/user/risk-score', verifyToken, async (req, res) => {
     }
 
     const { risk_score, segment } = result.rows[0];
-
     res.status(200).json({
       risk_score,
       segment,
       label: getRiskLabel(risk_score),
     });
   } catch (error) {
-    console.error('Get risk score error:', error);
+    console.error('Get risk score error:', error.message);
     res.status(500).json({ error: 'Failed to fetch risk score' });
+  }
+});
+
+// PUT /user/risk-score
+app.put('/user/risk-score', verifyToken, async (req, res) => {
+  try {
+    const { risk_score, segment } = req.body;
+    await pool.query(
+      `UPDATE users SET risk_score = COALESCE($1, risk_score),
+                        segment = COALESCE($2, segment),
+                        updated_at = NOW()
+       WHERE firebase_uid = $3`,
+      [risk_score, segment, req.user.uid]
+    );
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Update risk score error:', error.message);
+    res.status(500).json({ error: 'Failed to update risk score' });
   }
 });
 
 // Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', service: 'user-service' });
+  res.status(200).json({ status: 'ok', service: 'user-service' });
 });
 
-app.listen(PORT, () => {
-  console.log(`User Service running on port ${PORT}`);
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+});
+
+// Error middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+initDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`User Service running on port ${PORT}`);
+  });
 });

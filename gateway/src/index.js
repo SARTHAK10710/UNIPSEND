@@ -34,11 +34,13 @@ const services = [
 ];
 
 for (const { path, target } of services) {
+  const servicePrefix = path.replace('/api', '');
   app.use(
     path,
     createProxyMiddleware({
       target,
       changeOrigin: true,
+      pathRewrite: (reqPath) => `${servicePrefix}${reqPath}`,
     }),
   );
 }
