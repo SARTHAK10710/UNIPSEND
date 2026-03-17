@@ -79,21 +79,12 @@ const SplashScreen = ({ navigation }) => {
     <View style={styles.slide}>
 
       <View style={styles.illustrationContainer}>
-        <View style={styles.illustrationBox}>
-          <View style={styles.iconCircle}>
-            <Text style={styles.mainIcon}>{item.icon}</Text>
-          </View>
-        </View>
-        <View style={styles.badgeRow}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeIcon}>{item.badge1}</Text>
-          </View>
-          <View style={[styles.badge, styles.badgeActive]}>
-            <Text style={styles.badgeIcon}>{item.badge2}</Text>
-          </View>
-          <View style={styles.badge}>
-            <Text style={styles.badgeIcon}>{item.badge3}</Text>
-          </View>
+        <View style={styles.logoBoxMiddle}>
+          <Image 
+            source={require('../assets/images/logo.png')} 
+            style={styles.logoImageMiddle}
+            resizeMode="contain"
+          />
         </View>
       </View>
 
@@ -148,16 +139,7 @@ const SplashScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0a0f" />
 
-      {currentIndex === 0 && (
-        <View style={styles.logoContainer}>
-          <Image 
-            source={require('../assets/images/logo.png')} 
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-          <Text style={styles.logoText}>Unispend</Text>
-        </View>
-      )}
+      <View style={{ height: 40 }} />
 
       <FlatList
         ref={flatListRef}
@@ -275,28 +257,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
-  illustrationBox: {
-    width: width * 0.65,
+  logoBoxMiddle: {
+    width: width * 0.5,
     height: width * 0.5,
-    backgroundColor: '#17171f',
-    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  iconCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 20,
-    backgroundColor: '#1e1e28',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(124, 106, 255, 0.4)',
-  },
-  mainIcon: {
-    fontSize: 42,
+  logoImageMiddle: {
+    width: '100%',
+    height: '100%',
   },
   badgeRow: {
     flexDirection: 'row',
