@@ -9,6 +9,7 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
+import Svg, { Circle, G } from 'react-native-svg';
 import LinearGradient from 'react-native-linear-gradient';
 import { useProfile } from '../hooks/useProfile';
 import { useAuth } from '../context/AuthContext';
@@ -101,16 +102,35 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.riskCard}>
           <Text style={styles.cardTitle}>Risk Score</Text>
           <View style={styles.riskGauge}>
-            <View style={styles.riskCircleOuter}>
-              <View style={styles.riskCircleInner}>
-                <Text style={[styles.riskScoreText, { color: riskColor }]}>{riskScore}</Text>
-                <Text style={styles.riskOutOf}>/100</Text>
-              </View>
+            <Svg width="120" height="120" viewBox="0 0 120 120">
+              <G rotation="-90" origin="60, 60">
+                {/* Background Circle */}
+                <Circle
+                  cx="60"
+                  cy="60"
+                  r="50"
+                  stroke="rgba(124, 106, 255, 0.1)"
+                  strokeWidth="10"
+                  fill="none"
+                />
+                {/* Progress Circle */}
+                <Circle
+                  cx="60"
+                  cy="60"
+                  r="50"
+                  stroke={riskColor}
+                  strokeWidth="10"
+                  fill="none"
+                  strokeDasharray={`${2 * Math.PI * 50}`}
+                  strokeDashoffset={`${2 * Math.PI * 50 * (1 - riskScore / 100)}`}
+                  strokeLinecap="round"
+                />
+              </G>
+            </Svg>
+            <View style={styles.riskCircleInner}>
+              <Text style={[styles.riskScoreText, { color: riskColor }]}>{riskScore}</Text>
+              <Text style={styles.riskOutOf}>/100</Text>
             </View>
-            <View style={[styles.riskIndicator, {
-              backgroundColor: riskColor,
-              transform: [{ rotate: `${(riskScore / 100) * 360}deg` }],
-            }]} />
           </View>
           <Text style={[styles.riskLabel, { color: riskColor }]}>{riskLabel}</Text>
           <Text style={styles.riskDesc}>Based on your portfolio and spending patterns</Text>
@@ -224,16 +244,9 @@ const styles = StyleSheet.create({
   },
   cardTitle: { color: '#f0efff', fontSize: 16, fontWeight: '700', marginBottom: 16 },
   riskGauge: { width: 120, height: 120, alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 12 },
-  riskCircleOuter: {
-    width: 110, height: 110, borderRadius: 55, borderWidth: 10,
-    borderColor: 'rgba(124, 106, 255, 0.15)', alignItems: 'center', justifyContent: 'center',
-  },
-  riskCircleInner: { alignItems: 'center' },
+  riskCircleInner: { position: 'absolute', alignItems: 'center' },
   riskScoreText: { fontSize: 32, fontWeight: '700' },
   riskOutOf: { color: '#8884a8', fontSize: 12 },
-  riskIndicator: {
-    position: 'absolute', width: 12, height: 12, borderRadius: 6, top: 0,
-  },
   riskLabel: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
   riskDesc: { color: '#8884a8', fontSize: 12, textAlign: 'center' },
   emergencyCard: {

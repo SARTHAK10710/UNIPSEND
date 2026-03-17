@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { plaidAPI } from '../services/api';
 import {
   groupByCategory,
-  groupByDayOfWeek,
+  groupByRecentDays,
   groupByMerchant,
   normalizeByDay,
   filterByMonth,
@@ -31,7 +31,15 @@ export const useSpending = () => {
     console.log('[useSpending] processing month', month, '→', filtered.length, 'transactions');
 
     setCategoryBreakdown(groupByCategory(filtered));
-    setDailyData(groupByDayOfWeek(filtered));
+    
+    // Determine base date for trend (last day of the selected month or today)
+    const now = new Date();
+    let baseDate = now;
+    if (month !== now.getMonth()) {
+      baseDate = new Date(now.getFullYear(), month + 1, 0); 
+    }
+
+    setDailyData(groupByRecentDays(filtered, 7, baseDate));
     setTopMerchants(groupByMerchant(filtered));
     setHeatmapData(normalizeByDay(filtered));
     setMonthComparison(calculateMonthComparison(txs));

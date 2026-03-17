@@ -174,8 +174,9 @@ app.post('/order', verifyToken, async (req, res) => {
       filledAt: order.filled_at,
     });
   } catch (error) {
-    console.error('Create order error:', error.message);
-    res.status(500).json({ error: 'Failed to create order' });
+    console.error('Create order error:', error.message, error.response?.data);
+    const detail = error.response?.data?.message || error.message;
+    res.status(422).json({ error: `Alpaca Error: ${detail}` });
   }
 });
 

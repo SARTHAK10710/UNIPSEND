@@ -157,15 +157,15 @@ export const isRecurring = (transactions, merchantName) => {
 };
 
 export const groupByDayOfWeek = (transactions) => {
-  if (!transactions || transactions.length === 0) return [];
-
   const dayMap = {};
   DAY_NAMES.forEach((d) => { dayMap[d] = 0; });
 
-  transactions.forEach((tx) => {
-    const dayName = DAY_NAMES[new Date(tx.date).getDay()];
-    dayMap[dayName] += Math.abs(tx.amount || 0);
-  });
+  if (transactions && transactions.length > 0) {
+    transactions.forEach((tx) => {
+      const dayName = DAY_NAMES[new Date(tx.date).getDay()];
+      dayMap[dayName] += Math.abs(tx.amount || 0);
+    });
+  }
 
   const ordered = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const result = ordered.map((day) => ({
@@ -173,6 +173,38 @@ export const groupByDayOfWeek = (transactions) => {
     amount: Math.round(dayMap[day] || 0),
     isHigh: false,
   }));
+
+  const maxAmount = Math.max(...result.map((d) => d.amount));
+  result.forEach((d) => { if (d.amount === maxAmount && maxAmount > 0) d.isHigh = true; });
+
+  return result;
+};
+
+export const groupByRecentDays = (transactions, daysToLookBack = 7, baseDate = new Date()) => {
+  const result = [];
+  
+  for (let i = daysToLookBack - 1; i >= 0; i--) {
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() - i);
+    d.setHours(0, 0, 0, 0);
+    
+    const dayLabel = DAY_NAMES[d.getDay()];
+    
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    const amount = (transactions || [])
+      .filter(tx => tx.date && tx.date.startsWith(dateStr)) 
+      .reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0);
+    
+    result.push({
+      day: dayLabel,
+      amount: Math.round(amount),
+      isHigh: false
+    });
+  }
 
   const maxAmount = Math.max(...result.map((d) => d.amount));
   result.forEach((d) => { if (d.amount === maxAmount && maxAmount > 0) d.isHigh = true; });

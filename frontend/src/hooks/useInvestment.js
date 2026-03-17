@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { investmentAPI } from '../services/api';
+import { investmentAPI, userAPI } from '../services/api';
 
 const CRYPTO_SYMBOLS = ['BTC', 'ETH', 'DOGE', 'SOL', 'ADA', 'XRP', 'MATIC', 'DOT', 'AVAX', 'LINK'];
 
@@ -43,6 +43,7 @@ export const useInvestment = () => {
   const [movers, setMovers] = useState(null);
   const [orders, setOrders] = useState([]);
   const [allocation, setAllocation] = useState([]);
+  const [riskProfile, setRiskProfile] = useState({ risk_score: 0, label: 'Calculating...' });
 
   const [accountLoading, setAccountLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(true);
@@ -114,6 +115,16 @@ export const useInvestment = () => {
     }
   }, []);
 
+  const fetchRiskProfile = useCallback(async () => {
+    try {
+      const res = await userAPI.getRiskScore();
+      setRiskProfile(res.data || { risk_score: 0, label: 'Moderate' });
+      console.log('[useInvestment] risk profile:', res.data);
+    } catch (err) {
+      console.error('[useInvestment] fetchRiskProfile error:', err.message);
+    }
+  }, []);
+
   const fetchAll = useCallback(async () => {
     setError(null);
     try {
@@ -122,6 +133,7 @@ export const useInvestment = () => {
         fetchHoldings(),
         fetchMovers(),
         fetchOrders(),
+        fetchRiskProfile(),
       ]);
     } catch (err) {
       setError('Failed to load portfolio');
@@ -169,6 +181,7 @@ export const useInvestment = () => {
     movers,
     orders,
     allocation,
+    riskProfile,
 
     accountLoading,
     holdingsLoading,

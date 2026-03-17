@@ -52,6 +52,7 @@ const InvestmentScreen = () => {
     movers,
     orders,
     allocation,
+    riskProfile,
     accountLoading,
     holdingsLoading,
     moversLoading,
@@ -61,8 +62,8 @@ const InvestmentScreen = () => {
     refresh,
   } = useInvestment();
 
-  const riskScore = 0;
-  const riskLabel = '';
+  const riskScore = riskProfile?.risk_score || 0;
+  const riskLabel = riskProfile?.label || 'Moderate';
 
   const [orderSymbol, setOrderSymbol] = useState('');
   const [orderQty, setOrderQty] = useState('');
@@ -74,14 +75,25 @@ const InvestmentScreen = () => {
       return;
     }
     try {
-      const result = await placeOrder(orderSymbol, parseInt(orderQty), 'buy');
+      const parsedQty = parseFloat(orderQty);
+      if (isNaN(parsedQty) || parsedQty <= 0) {
+        Alert.alert('Error', 'Please enter a valid quantity');
+        return;
+      }
+
+      const result = await placeOrder(orderSymbol, parsedQty, 'buy');
       if (result.success) {
-        Alert.alert('Success', `Order placed for ${orderQty} shares of ${orderSymbol}`);
+        Alert.alert('Success', `Order placed for ${orderQty} units of ${orderSymbol}`);
         setShowOrderModal(false);
         setOrderSymbol('');
         setOrderQty('');
       } else {
-        Alert.alert('Error', result.error || 'Failed to place order');
+        const errorMsg = result.error;
+        if (errorMsg.includes('symbol not found')) {
+          Alert.alert('Invalid Symbol', `${orderSymbol} not found. Note: Alpaca Paper trading supports US stocks only (e.g. AAPL, BTC).`);
+        } else {
+          Alert.alert('Order Failed', errorMsg || 'Failed to place order');
+        }
       }
     } catch (err) {
       Alert.alert('Error', 'Failed to place order');
@@ -139,13 +151,49 @@ const InvestmentScreen = () => {
           style={styles.portfolioCard}
         >
           <Text style={styles.portfolioLabel}>Total Portfolio Value</Text>
-          <Text style={styles.portfolioValue}>{account ? `₹${account.portfolioValue?.toLocaleString() || '0'}` : '—'}</Text>
+          <Text style={styles.portfolioValue}>{account ? `₹${account.portfolioValue?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}` : '—'}</Text>
           <View style={styles.returnsRow}>
             <Text style={styles.returnsIcon}>{account?.dayPnl >= 0 ? '📈' : '📉'}</Text>
-            <Text style={styles.returnsText}>{account ? `${account.dayPnl >= 0 ? '+' : ''}₹${(account.dayPnl || 0).toLocaleString()}` : '—'}</Text>
+            <Text style={[styles.returnsText, { color: (account?.dayPnl || 0) >= 0 ? '#4effd6' : '#ff6b6b' }]}>
+              {account ? `${account.dayPnl >= 0 ? '+' : ''}₹${Math.abs(account.dayPnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+            </Text>
           </View>
           <Text style={styles.returnsLabel}>TODAY'S RETURNS</Text>
         </LinearGradient>
+
+        {/* Portfolio Breakdown */}
+        <View style={styles.breakdownCard}>
+          <View style={styles.breakdownRow}>
+            <View style={styles.breakdownItem}>
+              <Text style={styles.breakdownLabel}>💵 Cash</Text>
+              <Text style={styles.breakdownValue}>
+                {account ? `₹${(account.cash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+              </Text>
+            </View>
+            <View style={styles.breakdownDivider} />
+            <View style={styles.breakdownItem}>
+              <Text style={styles.breakdownLabel}>📊 Invested</Text>
+              <Text style={styles.breakdownValue}>
+                {account ? `₹${((account.portfolioValue || 0) - (account.cash || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.breakdownRow}>
+            <View style={styles.breakdownItem}>
+              <Text style={styles.breakdownLabel}>🛒 Buying Power</Text>
+              <Text style={styles.breakdownValue}>
+                {account ? `₹${(account.buyingPower || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+              </Text>
+            </View>
+            <View style={styles.breakdownDivider} />
+            <View style={styles.breakdownItem}>
+              <Text style={styles.breakdownLabel}>{(account?.totalPnl || 0) >= 0 ? '📈' : '📉'} Total P&L</Text>
+              <Text style={[styles.breakdownValue, { color: (account?.totalPnl || 0) >= 0 ? '#4effd6' : '#ff6b6b' }]}>
+                {account ? `${(account.totalPnl || 0) >= 0 ? '+' : ''}₹${Math.abs(account.totalPnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+              </Text>
+            </View>
+          </View>
+        </View>
 
         {/* Invest Button */}
         <TouchableOpacity style={styles.investButton} onPress={() => setShowOrderModal(!showOrderModal)}>
@@ -180,8 +228,14 @@ const InvestmentScreen = () => {
               onChangeText={setOrderQty}
               keyboardType="numeric"
             />
-            <TouchableOpacity style={styles.orderSubmit} onPress={handleInvest}>
-              <Text style={styles.orderSubmitText}>Place Buy Order</Text>
+            <TouchableOpacity 
+              style={[styles.orderSubmit, { opacity: orderLoading ? 0.6 : 1 }]} 
+              onPress={handleInvest}
+              disabled={orderLoading}
+            >
+              <Text style={styles.orderSubmitText}>
+                {orderLoading ? 'Processing...' : 'Place Buy Order'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -189,50 +243,29 @@ const InvestmentScreen = () => {
         {/* Risk Profile */}
         <View style={styles.riskCard}>
           <Text style={styles.riskTitle}>RISK PROFILE</Text>
-          <View style={styles.riskGauge}>
-            {/* Semicircle gauge */}
-            <View style={styles.gaugeOuter}>
-              <View style={[styles.gaugeArc, { borderColor: 'rgba(124, 106, 255, 0.2)' }]} />
-              <View style={[styles.gaugeFillArc, {
-                borderColor: riskColor,
-                transform: [{ rotate: `${-90 + (riskScore / 100) * 180}deg` }],
-              }]} />
+          {/* Linear gauge bar */}
+          <View style={styles.gaugeBarContainer}>
+            <View style={styles.gaugeBarTrack}>
+              <LinearGradient
+                colors={['#4effd6', '#ffd166', '#ff6b6b']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.gaugeBarFill, { width: `${Math.max(riskScore, 5)}%` }]}
+              />
             </View>
-            <View style={styles.gaugeCenter}>
-              <Text style={[styles.gaugeScore, { color: riskColor }]}>{riskScore}</Text>
+            <View style={[styles.gaugeBarIndicator, { left: `${Math.max(riskScore, 5)}%` }]}>
+              <View style={[styles.gaugeBarDot, { backgroundColor: riskColor }]} />
             </View>
           </View>
-          <Text style={[styles.riskLabel, { color: riskColor }]}>{riskLabel}</Text>
+          <View style={styles.gaugeLabelsRow}>
+            <Text style={styles.gaugeLabelMin}>0</Text>
+            <Text style={[styles.gaugeScore, { color: riskColor }]}>{riskScore}</Text>
+            <Text style={styles.gaugeLabelMax}>100</Text>
+          </View>
+          <Text style={[styles.riskLabelText, { color: riskColor }]}>{riskLabel}</Text>
           <Text style={styles.riskDescription}>{riskLabel ? `Your risk profile is ${riskLabel}` : ''}</Text>
         </View>
 
-        {/* Asset Allocation */}
-        <View style={styles.allocationCard}>
-          <Text style={styles.allocationTitle}>ASSET ALLOCATION</Text>
-          <View style={styles.allocationContent}>
-            <View style={styles.allocationDonut}>
-              <View style={styles.allocationRing}>
-                {allocation.map((a, idx) => (
-                  <View
-                    key={idx}
-                    style={[styles.allocationSegment, {
-                      borderColor: a.color,
-                      borderWidth: idx === 0 ? 14 : 0,
-                    }]}
-                  />
-                ))}
-              </View>
-            </View>
-            <View style={styles.allocationLegend}>
-              {allocation.map((a, idx) => (
-                <View key={idx} style={styles.allocLegendItem}>
-                  <View style={[styles.allocDot, { backgroundColor: a.color }]} />
-                  <Text style={styles.allocName}>{a.name} ({a.percentage}%)</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
 
         {/* Market Movers */}
         <Text style={styles.sectionTitle}>Market Movers</Text>
@@ -324,36 +357,53 @@ const styles = StyleSheet.create({
     alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
   riskTitle: { color: '#8884a8', fontSize: 12, fontWeight: '600', letterSpacing: 1.5, marginBottom: 20 },
-  riskGauge: { width: 160, height: 90, position: 'relative', marginBottom: 12 },
-  gaugeOuter: { width: 160, height: 80, overflow: 'hidden', position: 'relative' },
-  gaugeArc: {
-    width: 160, height: 160, borderRadius: 80, borderWidth: 14,
-    position: 'absolute', top: 0,
+  gaugeBarContainer: {
+    width: '100%', height: 28, position: 'relative', marginBottom: 8,
   },
-  gaugeFillArc: {
-    width: 160, height: 160, borderRadius: 80, borderWidth: 14,
-    position: 'absolute', top: 0, borderRightColor: 'transparent', borderBottomColor: 'transparent',
+  gaugeBarTrack: {
+    width: '100%', height: 12, borderRadius: 6,
+    backgroundColor: 'rgba(124, 106, 255, 0.12)', overflow: 'hidden',
+    marginTop: 8,
   },
-  gaugeCenter: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center' },
+  gaugeBarFill: {
+    height: '100%', borderRadius: 6,
+  },
+  gaugeBarIndicator: {
+    position: 'absolute', top: 0, marginLeft: -10,
+  },
+  gaugeBarDot: {
+    width: 20, height: 20, borderRadius: 10,
+    borderWidth: 3, borderColor: '#0a0a0f',
+    elevation: 4,
+  },
+  gaugeLabelsRow: {
+    width: '100%', flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 8,
+  },
+  gaugeLabelMin: { color: '#4effd6', fontSize: 11, fontWeight: '600' },
+  gaugeLabelMax: { color: '#ff6b6b', fontSize: 11, fontWeight: '600' },
   gaugeScore: { fontSize: 36, fontWeight: '700' },
-  riskLabel: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
+  riskLabelText: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
   riskDescription: { color: '#8884a8', fontSize: 13, textAlign: 'center' },
-  allocationCard: {
-    backgroundColor: '#17171f', borderRadius: 20, padding: 24, marginBottom: 20,
+  breakdownCard: {
+    backgroundColor: '#17171f', borderRadius: 20, padding: 20, marginBottom: 20,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  allocationTitle: { color: '#8884a8', fontSize: 12, fontWeight: '600', letterSpacing: 1.5, marginBottom: 20 },
-  allocationContent: { flexDirection: 'row', alignItems: 'center' },
-  allocationDonut: { width: 100, height: 100, marginRight: 24 },
-  allocationRing: {
-    width: 100, height: 100, borderRadius: 50, borderWidth: 14,
-    borderColor: '#7c6aff', alignItems: 'center', justifyContent: 'center',
+  breakdownRow: {
+    flexDirection: 'row', alignItems: 'center', marginBottom: 12,
   },
-  allocationSegment: { position: 'absolute' },
-  allocationLegend: { flex: 1, gap: 10 },
-  allocLegendItem: { flexDirection: 'row', alignItems: 'center' },
-  allocDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
-  allocName: { color: '#f0efff', fontSize: 13, fontWeight: '500' },
+  breakdownItem: {
+    flex: 1, alignItems: 'center',
+  },
+  breakdownDivider: {
+    width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  breakdownLabel: {
+    color: '#8884a8', fontSize: 11, fontWeight: '600', marginBottom: 4,
+  },
+  breakdownValue: {
+    color: '#f0efff', fontSize: 16, fontWeight: '700',
+  },
   sectionTitle: { color: '#f0efff', fontSize: 18, fontWeight: '700', marginBottom: 14 },
   moversList: { paddingBottom: 20, gap: 10 },
   moverCard: {

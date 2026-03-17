@@ -107,7 +107,7 @@ const HomeScreen = ({ navigation }) => {
     );
   }
 
-  const maxSpend = Math.max(...spendingTrend.map((d) => d.amount), 1);
+  const maxSpend = spendingTrend.length > 0 ? Math.max(...spendingTrend.map((d) => d.amount), 1) : 1;
 
   return (
     <View style={styles.container}>
@@ -174,20 +174,24 @@ const HomeScreen = ({ navigation }) => {
               <View key={idx} style={styles.barCol}>
                 <View style={styles.barWrapper}>
                   <LinearGradient
-                    colors={day.isHighlight ? ['#7c6aff', '#9b8aff'] : ['#2a2a3a', '#2a2a3a']}
+                    colors={day.isHigh ? ['#7c6aff', '#9b8aff'] : ['rgba(124, 106, 255, 0.1)', 'rgba(124, 106, 255, 0.05)']}
                     style={[
                       styles.bar,
-                      { height: `${(day.amount / maxSpend) * 100}%` },
+                      { 
+                        height: maxSpend > 1 
+                          ? `${Math.max((day.amount / maxSpend) * 100, 6)}%` 
+                          : '6%' 
+                      },
                     ]}
                   />
-                  {day.isHighlight && (
+                  {day.isHigh && day.amount > 0 && (
                     <View style={styles.barTooltip}>
                       <Text style={styles.barTooltipText}>₹{day.amount}</Text>
                     </View>
                   )}
                 </View>
-                <Text style={[styles.barLabel, day.isHighlight && styles.barLabelActive]}>
-                  {DAYS[idx]}
+                <Text style={[styles.barLabel, day.isHigh && styles.barLabelActive]}>
+                  {day.day.toUpperCase()}
                 </Text>
               </View>
             ))}
@@ -413,16 +417,21 @@ const styles = StyleSheet.create({
   },
   barTooltip: {
     position: 'absolute',
-    top: -24,
+    top: -30,
     backgroundColor: '#7c6aff',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 8,
+    minWidth: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   barTooltipText: {
     color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   barLabel: {
     color: '#8884a8',
