@@ -56,6 +56,7 @@ export const plaidAPI = {
 
 export const aiAPI = {
   getInsights: () => api.get("/api/ai/insights"),
+  analyze: (data) => axios.post("https://unispend-ai.onrender.com/analyze", data),
 };
 
 export const investmentAPI = {

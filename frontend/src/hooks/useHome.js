@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { plaidAPI } from '../services/api';
+import { plaidAPI, aiAPI } from '../services/api';
 import { formatCurrency } from '../utils/formatCurrency';
-import { groupByCategory, groupByRecentDays, mapCategory } from '../utils/dataTransformers';
+import { groupByCategory, groupByRecentDays, mapCategory, transformToAIFormat } from '../utils/dataTransformers';
 
 export const useHome = () => {
   const { user } = useAuth();
@@ -11,6 +11,7 @@ export const useHome = () => {
   const [spent, setSpent] = useState(0);
   const [saved, setSaved] = useState(0);
   const [kpis, setKpis] = useState([]);
+  const [healthScore, setHealthScore] = useState(null);
   const [spendingTrend, setSpendingTrend] = useState([]);
   const [categories, setCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -99,7 +100,24 @@ export const useHome = () => {
         fetchTransactions(),
       ]);
 
-      // setInsights([]) // AI service not ready yet
+      // Call AI API if calculations succeeded
+      if (txResult.status === 'fulfilled' && txResult.value) {
+        try {
+          const { txs } = txResult.value;
+          const currentBal = (balResult.status === 'fulfilled' && balance) ? balance.total : 0;
+          const aiData = transformToAIFormat(txs, currentBal);
+          
+          console.log('[useHome] requesting AI analysis...');
+          const aiRes = await aiAPI.analyze(aiData);
+          if (aiRes.data) {
+            setHealthScore(aiRes.data.financial_health_score);
+            setInsights(aiRes.data.suggestions || []);
+          }
+        } catch (aiErr) {
+          console.warn('[useHome] AI analysis failed:', aiErr.message);
+          // Fallback handled by initial state
+        }
+      }
     } catch (err) {
       setError('Failed to load dashboard data');
       console.error('[useHome] fetchAll error:', err.message);
@@ -118,18 +136,18 @@ export const useHome = () => {
 
       setKpis([
         {
+          title: 'Health Score',
+          value: healthScore ? `${Math.round(healthScore)}/100` : 'Analyze',
+          gradient: healthScore > 70 ? ['#4effd6', '#2cb5a0'] : ['#ffd166', '#e6b84d'],
+          subValue: healthScore > 70 ? 'Excellent' : 'Needs attention',
+          subColor: healthScore > 70 ? '#4effd6' : '#ffd166',
+        },
+        {
           title: 'Spent',
           value: formatCurrency(spent),
           gradient: ['#7c6aff', '#9b8aff'],
           subValue: 'This month',
           subColor: '#ff6b6b',
-        },
-        {
-          title: 'Saved',
-          value: formatCurrency(savedAmount > 0 ? savedAmount : 0),
-          gradient: ['#4effd6', '#2cb5a0'],
-          subValue: savedAmount > 0 ? 'On track' : 'Overspent',
-          subColor: savedAmount > 0 ? '#4effd6' : '#ff6b6b',
         },
         {
           title: 'Balance',

@@ -242,3 +242,19 @@ export const detectRecurringSubscriptions = (transactions) => {
 
   return recurring.sort((a, b) => b.amount - a.amount);
 };
+
+export const transformToAIFormat = (transactions, currentBalance = 0) => {
+  if (!transactions) return { transactions: [], current_balance: currentBalance };
+
+  const formattedTransactions = transactions.map((tx) => ({
+    time: tx.date.includes(' ') ? tx.date : `${tx.date} 12:00:00`,
+    // Plaid: + is expense, - is income. AI: + is income, - is expense.
+    amount: -(tx.amount || 0),
+    category: Array.isArray(tx.category) ? tx.category[0]?.toLowerCase() : (tx.category || 'general').toLowerCase(),
+  }));
+
+  return {
+    transactions: formattedTransactions,
+    current_balance: currentBalance,
+  };
+};

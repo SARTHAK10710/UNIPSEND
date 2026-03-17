@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { userAPI, plaidAPI } from '../services/api';
-import { filterByMonth } from '../utils/dataTransformers';
+import { userAPI, plaidAPI, aiAPI } from '../services/api';
+import { filterByMonth, transformToAIFormat } from '../utils/dataTransformers';
 
 const ACCOUNT_ICONS = { depository: '🏦', credit: '💳', investment: '📈', loan: '🏛️' };
 const ACCOUNT_COLORS = { depository: '#1a73e8', credit: '#ff6b6b', investment: '#4effd6', loan: '#ffd166' };
@@ -49,17 +49,28 @@ export const useProfile = () => {
   const fetchRiskScore = useCallback(async () => {
     setRiskLoading(true);
     try {
-      console.log('[useProfile] fetching risk score...');
-      const res = await userAPI.getRiskScore();
-      const data = res.data;
-      setRiskScore(data.risk_score);
-      setRiskLabel(data.label);
-      setSegment(data.segment);
-      console.log('[useProfile] risk score loaded:', data);
+      console.log('[useProfile] fetching risk score via AI...');
+      // Get data for AI
+      const [balRes, txRes] = await Promise.all([
+        plaidAPI.getBalance(),
+        plaidAPI.getTransactions()
+      ]);
+      
+      const transactions = txRes.data?.transactions || [];
+      const currentBalance = balRes.data?.accounts?.reduce((sum, acc) => sum + (acc.current || 0), 0) || 0;
+      
+      const aiData = transformToAIFormat(transactions, currentBalance);
+      const aiRes = await aiAPI.analyze(aiData);
+      
+      if (aiRes.data) {
+        setRiskScore(aiRes.data.risk_score * 100); // UI expects 0-100 probably, or check guidance. API guide says risk_score is e.g. 0.32
+        setRiskLabel(aiRes.data.spender_type || 'Moderate');
+        setSegment(aiRes.data.spending_trend || 'Analyzing');
+        console.log('[useProfile] AI risk score loaded:', aiRes.data);
+      }
     } catch (err) {
       console.error('[useProfile] fetchRiskScore error:', err.message);
-      setRiskScore(null);
-      setRiskLabel(null);
+      // Fallback to legacy if possible or stay null
     } finally {
       setRiskLoading(false);
     }

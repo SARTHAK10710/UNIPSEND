@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { plaidAPI } from '../services/api';
+import { plaidAPI, aiAPI } from '../services/api';
 import {
   groupByCategory,
   groupByRecentDays,
@@ -7,6 +7,7 @@ import {
   normalizeByDay,
   filterByMonth,
   calculateMonthComparison,
+  transformToAIFormat,
 } from '../utils/dataTransformers';
 
 export const useSpending = () => {
@@ -56,9 +57,20 @@ export const useSpending = () => {
       const res = await plaidAPI.getTransactions();
       const txs = res.data?.transactions || [];
       setAllTransactions(txs);
-      console.log('[useSpending] data loaded:', txs.length, 'transactions');
-
       processTransactions(txs, selectedMonth);
+
+      // Fetch AI Insights
+      try {
+        const balRes = await plaidAPI.getBalance();
+        const currentBal = balRes.data?.accounts?.reduce((sum, acc) => sum + (acc.current || 0), 0) || 0;
+        const aiData = transformToAIFormat(txs, currentBal);
+        const aiRes = await aiAPI.analyze(aiData);
+        if (aiRes.data && aiRes.data.suggestions) {
+          setSuggestions(aiRes.data.suggestions);
+        }
+      } catch (aiErr) {
+        console.warn('[useSpending] AI analysis failed:', aiErr.message);
+      }
     } catch (err) {
       console.error('[useSpending] fetchData error:', err.message);
       setError(err.response?.data?.message || 'Failed to load spending data');
