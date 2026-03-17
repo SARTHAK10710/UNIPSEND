@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useAuth } from '../context/AuthContext';
@@ -67,9 +68,11 @@ const AuthScreen = ({ navigation }) => {
           <View style={styles.topGlow} />
 
           <View style={styles.brandContainer}>
-            <View style={styles.logoBox}>
-              <Text style={styles.logoEmoji}>💎</Text>
-            </View>
+            <Image 
+              source={require('../assets/images/logo.png')} 
+              style={styles.logoImageSmall}
+              resizeMode="contain"
+            />
             <Text style={styles.brandName}>Unispend</Text>
           </View>
 
@@ -205,19 +208,10 @@ const styles = StyleSheet.create({
     marginTop: 70,
     marginBottom: 40,
   },
-  logoBox: {
+  logoImageSmall: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: '#1e1e28',
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(124, 106, 255, 0.3)',
-  },
-  logoEmoji: {
-    fontSize: 22,
   },
   brandName: {
     fontSize: 22,

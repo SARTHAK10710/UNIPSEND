@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Animated,
   StatusBar,
+  Image,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -149,9 +150,11 @@ const SplashScreen = ({ navigation }) => {
 
       {currentIndex === 0 && (
         <View style={styles.logoContainer}>
-          <View style={styles.logoIcon}>
-            <Text style={styles.logoEmoji}>💎</Text>
-          </View>
+          <Image 
+            source={require('../assets/images/logo.png')} 
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.logoText}>Unispend</Text>
         </View>
       )}
@@ -209,19 +212,10 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 5,
   },
-  logoIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: '#17171f',
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoImage: {
+    width: 80,
+    height: 80,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(124, 106, 255, 0.3)',
-  },
-  logoEmoji: {
-    fontSize: 28,
   },
   logoText: {
     fontSize: 28,

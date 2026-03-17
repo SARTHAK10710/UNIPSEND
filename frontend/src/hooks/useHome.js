@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { plaidAPI } from '../services/api';
 import { formatCurrency } from '../utils/formatCurrency';
-import { groupByCategory, groupByDayOfWeek, mapCategory } from '../utils/dataTransformers';
+import { groupByCategory, groupByRecentDays, mapCategory } from '../utils/dataTransformers';
 
 export const useHome = () => {
   const { user } = useAuth();
@@ -77,7 +77,7 @@ export const useHome = () => {
         progress: c.percent,
       })));
 
-      const daily = groupByDayOfWeek(thisMonthTxs);
+      const daily = groupByRecentDays(txs);
       setSpendingTrend(daily);
 
       return { totalSpent, txs };
