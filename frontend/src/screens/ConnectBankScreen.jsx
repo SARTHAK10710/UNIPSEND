@@ -10,14 +10,11 @@ import {
   Modal,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { PlaidLink } from 'react-native-plaid-link-sdk';
+import { open, create } from 'react-native-plaid-link-sdk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
+import { plaidAPI } from '../services/api';
 
-const createLinkToken = () => api.post('/plaid/link-token');
-const exchangeToken = (publicToken) =>
-  api.post('/plaid/exchange-token', { public_token: publicToken });
 
 const POPULAR_BANKS = [
   { id: 'chase', name: 'Chase', icon: '🏦', color: '#1a73e8' },
@@ -33,11 +30,27 @@ const ConnectBankScreen = ({ navigation }) => {
   const [linkToken, setLinkToken] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
 
+  React.useEffect(() => {
+    if (linkToken) {
+      create({
+        token: linkToken,
+        onLoad: () => {
+          open({
+            onSuccess: handlePlaidSuccess,
+            onExit: handlePlaidExit,
+          });
+        }
+      });
+      setLinkToken(null);
+    }
+  }, [linkToken, handlePlaidSuccess, handlePlaidExit]);
+
   const handleConnectBank = async () => {
+    if (isLoading) return;
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const response = await createLinkToken();
+      const response = await plaidAPI.createLinkToken();
       const token = response.data?.linkToken || response.data?.link_token;
       if (token) {
         setLinkToken(token);
@@ -55,13 +68,16 @@ const ConnectBankScreen = ({ navigation }) => {
     }
   };
 
+  const [isLinked, setIsLinked] = useState(false);
+
   const handlePlaidSuccess = useCallback(
     async (success) => {
       setIsExchanging(true);
       setErrorMessage(null);
       try {
-        await exchangeToken(success.publicToken);
+        await plaidAPI.exchangeToken(success.publicToken);
         await AsyncStorage.setItem('bankSetupCompleted', 'true');
+        setIsLinked(true);
         setHasConnectedBank(true);
         // AppNavigator will automatically switch to MainTabs
       } catch (err) {
@@ -116,32 +132,46 @@ const ConnectBankScreen = ({ navigation }) => {
           <View style={{ width: 24 }} />
         </View>
 
-        <View style={styles.heroCard}>
-          <View style={styles.shieldContainer}>
-            <View style={styles.shieldOuter}>
-              <View style={styles.shieldInner}>
-                <Text style={styles.shieldIcon}>🛡️</Text>
+        {isLinked ? (
+          <View style={styles.successContainer}>
+            <View style={styles.successCircle}>
+              <Text style={styles.successIcon}>✓</Text>
+            </View>
+            <Text style={styles.successTitle}>Bank Connected!</Text>
+            <Text style={styles.successSubtitle}>
+              Your account is successfully linked. We're redirecting you to your dashboard.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.heroCard}>
+              <View style={styles.shieldContainer}>
+                <View style={styles.shieldOuter}>
+                  <View style={styles.shieldInner}>
+                    <Text style={styles.shieldIcon}>🛡️</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.securityBadges}>
+                <View style={styles.secBadge}>
+                  <Text style={styles.secBadgeIcon}>🏛️</Text>
+                </View>
+                <View style={[styles.secBadge, styles.secBadgeActive]}>
+                  <Text style={styles.secBadgeIcon}>🔗</Text>
+                </View>
+                <View style={styles.secBadge}>
+                  <Text style={styles.secBadgeIcon}>📄</Text>
+                </View>
               </View>
             </View>
-          </View>
-          <View style={styles.securityBadges}>
-            <View style={styles.secBadge}>
-              <Text style={styles.secBadgeIcon}>🏛️</Text>
-            </View>
-            <View style={[styles.secBadge, styles.secBadgeActive]}>
-              <Text style={styles.secBadgeIcon}>🔗</Text>
-            </View>
-            <View style={styles.secBadge}>
-              <Text style={styles.secBadgeIcon}>📄</Text>
-            </View>
-          </View>
-        </View>
 
-        <Text style={styles.title}>Connect your bank</Text>
-        <View style={styles.securedRow}>
-          <Text style={styles.securedIcon}>✅</Text>
-          <Text style={styles.securedText}>Secured by Plaid</Text>
-        </View>
+            <Text style={styles.title}>Connect your bank</Text>
+            <View style={styles.securedRow}>
+              <Text style={styles.securedIcon}>✅</Text>
+              <Text style={styles.securedText}>Secured by Plaid</Text>
+            </View>
+          </>
+        )}
 
         {/* Error card */}
         {errorMessage && (
@@ -154,85 +184,74 @@ const ConnectBankScreen = ({ navigation }) => {
           </View>
         )}
 
-        <Text style={styles.sectionLabel}>POPULAR BANKS</Text>
+        {!isLinked && (
+          <>
+            <Text style={styles.sectionLabel}>POPULAR BANKS</Text>
 
-        {POPULAR_BANKS.map((bank) => (
-          <TouchableOpacity
-            key={bank.id}
-            style={[
-              styles.bankRow,
-              selectedBank === bank.id && styles.bankRowSelected,
-            ]}
-            onPress={() => setSelectedBank(bank.id)}
-          >
-            <View style={[styles.bankIcon, { backgroundColor: bank.color + '22' }]}>
-              <Text style={styles.bankEmoji}>{bank.icon}</Text>
+            {POPULAR_BANKS.map((bank) => (
+              <TouchableOpacity
+                key={bank.id}
+                style={[
+                  styles.bankRow,
+                  selectedBank === bank.id && styles.bankRowSelected,
+                ]}
+                onPress={() => setSelectedBank(bank.id)}
+              >
+                <View style={[styles.bankIcon, { backgroundColor: bank.color + '22' }]}>
+                  <Text style={styles.bankEmoji}>{bank.icon}</Text>
+                </View>
+                <Text style={styles.bankName}>{bank.name}</Text>
+                <Text style={styles.bankArrow}>›</Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity style={styles.searchLink} onPress={handleConnectBank}>
+              <Text style={styles.searchLinkText}>Search for your bank</Text>
+            </TouchableOpacity>
+
+            <View style={styles.trustBadges}>
+              <View style={styles.trustItem}>
+                <Text style={styles.trustIcon}>🔒</Text>
+                <Text style={styles.trustLabel}>256-BIT{'\n'}ENCRYPTION</Text>
+              </View>
+              <View style={styles.trustItem}>
+                <Text style={styles.trustIcon}>🛡️</Text>
+                <Text style={styles.trustLabel}>BANK-LEVEL{'\n'}SECURITY</Text>
+              </View>
             </View>
-            <Text style={styles.bankName}>{bank.name}</Text>
-            <Text style={styles.bankArrow}>›</Text>
-          </TouchableOpacity>
-        ))}
+          </>
+        )}
 
-        <TouchableOpacity style={styles.searchLink} onPress={handleConnectBank}>
-          <Text style={styles.searchLinkText}>Search for your bank</Text>
-        </TouchableOpacity>
-
-        <View style={styles.trustBadges}>
-          <View style={styles.trustItem}>
-            <Text style={styles.trustIcon}>🔒</Text>
-            <Text style={styles.trustLabel}>256-BIT{'\n'}ENCRYPTION</Text>
-          </View>
-          <View style={styles.trustItem}>
-            <Text style={styles.trustIcon}>🛡️</Text>
-            <Text style={styles.trustLabel}>BANK-LEVEL{'\n'}SECURITY</Text>
-          </View>
-        </View>
-
-        {linkToken ? (
-          <PlaidLink
-            tokenConfig={{ token: linkToken }}
-            onSuccess={handlePlaidSuccess}
-            onExit={handlePlaidExit}
-          >
-            <View style={styles.connectButton}>
+        {!isLinked && (
+          <>
+            <TouchableOpacity
+              style={styles.connectButton}
+              onPress={handleConnectBank}
+              disabled={isLoading}
+            >
               <LinearGradient
                 colors={['#7c6aff', '#9b8aff']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.connectGradient}
               >
-                <Text style={styles.connectText}>Open Plaid Link ⚡</Text>
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.connectText}>Connect Bank Account ⚡</Text>
+                )}
               </LinearGradient>
-            </View>
-          </PlaidLink>
-        ) : (
-          <TouchableOpacity
-            style={styles.connectButton}
-            onPress={handleConnectBank}
-            disabled={isLoading}
-          >
-            <LinearGradient
-              colors={['#7c6aff', '#9b8aff']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.connectGradient}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.connectText}>Connect Bank Account ⚡</Text>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
+            </TouchableOpacity>
+
+            <Text style={styles.disclaimer}>
+              By connecting your account, you agree to our Terms of Service and Privacy Policy. Your credentials are never stored.
+            </Text>
+
+            <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+              <Text style={styles.skipText}>Skip for now</Text>
+            </TouchableOpacity>
+          </>
         )}
-
-        <Text style={styles.disclaimer}>
-          By connecting your account, you agree to our Terms of Service and Privacy Policy. Your credentials are never stored.
-        </Text>
-
-        <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-          <Text style={styles.skipText}>Skip for now</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -485,6 +504,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginTop: 20,
+  },
+  // Success state
+  successContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  successCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#4effd6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: '#4effd6',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  successIcon: {
+    fontSize: 50,
+    color: '#0a0a0f',
+    fontWeight: '700',
+  },
+  successTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#f0efff',
+    fontFamily: 'Syne-Bold',
+    marginBottom: 12,
+  },
+  successSubtitle: {
+    fontSize: 16,
+    color: '#8884a8',
+    textAlign: 'center',
+    lineHeight: 24,
+    paddingHorizontal: 20,
   },
 });
 

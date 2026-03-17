@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { authAPI } from "../services/api";
+import { authAPI, userAPI } from "../services/api";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -32,11 +32,18 @@ export const AuthProvider = ({ children }) => {
 
         try {
           await authAPI.register({});
-        } catch (e) {}
-
-        // Check if bankSetupCompleted flag exists
-        const bankSetupDone = await AsyncStorage.getItem("bankSetupCompleted");
-        setHasConnectedBank(bankSetupDone === "true");
+          
+          // Fetch user profile from backend to check for Plaid token
+          const profileRes = await userAPI.getProfile();
+          const profile = profileRes.data;
+          
+          const bankSetupDone = await AsyncStorage.getItem("bankSetupCompleted");
+          setHasConnectedBank(bankSetupDone === "true" || !!profile?.plaid_access_token);
+        } catch (e) {
+          console.error("Auth initialization error:", e.message);
+          const bankSetupDone = await AsyncStorage.getItem("bankSetupCompleted");
+          setHasConnectedBank(bankSetupDone === "true");
+        }
         setBankCheckLoading(false);
       } else {
         setUser(null);
