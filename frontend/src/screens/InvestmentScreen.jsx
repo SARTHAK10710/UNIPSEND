@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useInvestment } from '../hooks/useInvestment';
+import { useUser } from '../context/UserContext';
 
 const { width } = Dimensions.get('window');
 
@@ -61,31 +62,86 @@ const InvestmentScreen = () => {
     refresh,
   } = useInvestment();
 
-  const riskScore = 0;
-  const riskLabel = '';
+  const { getRiskScore, getRiskLabelText } = useUser();
+  const riskScore = getRiskScore();
+  const riskLabel = getRiskLabelText();
 
   const [orderSymbol, setOrderSymbol] = useState('');
   const [orderQty, setOrderQty] = useState('');
   const [showOrderModal, setShowOrderModal] = useState(false);
 
-  const handleInvest = async () => {
+  const getTradingInfo = (sym) => {
+    const indianSuffixes = ['.BSE', '.NSE', '.BO', '.NS'];
+    const cryptoSymbols = ['BTC', 'ETH', 'DOGE', 'SOL'];
+    const indianStocks = [
+      'RELIANCE', 'TCS', 'INFY', 'HDFC', 'ICICI', 'WIPRO', 'HCLTECH',
+      'BAJFINANCE', 'KOTAKBANK', 'SBIN', 'AXISBANK', 'MARUTI', 'TITAN',
+      'SUNPHARMA', 'TATAMOTORS', 'ADANIENT', 'ONGC', 'NTPC', 'NIFTYBEES',
+    ];
+    const upper = (sym || '').toUpperCase();
+    if (cryptoSymbols.includes(upper)) {
+      return { label: 'Crypto', color: '#ffd166', tradeable: false, note: 'Use Binance to trade' };
+    }
+    if (indianSuffixes.some((s) => upper.endsWith(s)) || indianStocks.includes(upper)) {
+      return { label: 'NSE/BSE', color: '#4effd6', tradeable: false, note: 'Simulated trading only' };
+    }
+    return { label: 'NYSE/NASDAQ', color: '#7c6aff', tradeable: true, note: 'Paper trading on Alpaca' };
+  };
+
+  const handlePlaceOrder = async (symbol, qty, side) => {
+    if (!symbol) {
+      Alert.alert('Error', 'Please select a stock');
+      return;
+    }
+    if (!qty || qty <= 0) {
+      Alert.alert('Error', 'Please enter valid quantity');
+      return;
+    }
+    const result = await placeOrder(symbol, qty, side);
+    if (result.success) {
+      if (result.simulated) {
+        Alert.alert(
+          '✅ Order Simulated',
+          `${side.toUpperCase()} ${qty} ${symbol}\nThis is a simulated order for Indian markets.\nIn production this would execute on NSE/BSE.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          '✅ Paper Trade Executed',
+          `${side.toUpperCase()} ${qty} ${symbol}\nOrder placed on Alpaca paper trading.\nNo real money used.`,
+          [{ text: 'OK' }]
+        );
+      }
+      setShowOrderModal(false);
+      setOrderSymbol('');
+      setOrderQty('');
+    } else {
+      let userMessage = result.error;
+      if (result.code === 'SYMBOL_NOT_FOUND') {
+        userMessage = `${symbol} is not available for trading.\nTry US stocks like AAPL, SPY, MSFT.`;
+      }
+      if (result.code === 'INSUFFICIENT_FUNDS') {
+        userMessage = 'Not enough buying power.\nAlpaca paper accounts start with $100,000.';
+      }
+      Alert.alert('❌ Order Failed', userMessage);
+    }
+  };
+
+  const handleInvest = () => {
     if (!orderSymbol || !orderQty) {
       Alert.alert('Error', 'Please enter symbol and quantity');
       return;
     }
-    try {
-      const result = await placeOrder(orderSymbol, parseInt(orderQty), 'buy');
-      if (result.success) {
-        Alert.alert('Success', `Order placed for ${orderQty} shares of ${orderSymbol}`);
-        setShowOrderModal(false);
-        setOrderSymbol('');
-        setOrderQty('');
-      } else {
-        Alert.alert('Error', result.error || 'Failed to place order');
-      }
-    } catch (err) {
-      Alert.alert('Error', 'Failed to place order');
-    }
+    const tradingInfo = getTradingInfo(orderSymbol);
+    const qty = parseInt(orderQty);
+    Alert.alert(
+      'Confirm Order',
+      `BUY ${qty} shares of ${orderSymbol}\n\nExchange: ${tradingInfo.label}\nType: ${tradingInfo.tradeable ? 'Paper Trade (Alpaca)' : 'Simulated Order'}\n\nNo real money will be used.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm', onPress: () => handlePlaceOrder(orderSymbol, qty, 'buy') },
+      ]
+    );
   };
 
   const riskColor = riskScore < 40 ? '#4effd6' : riskScore < 70 ? '#ffd166' : '#ff6b6b';

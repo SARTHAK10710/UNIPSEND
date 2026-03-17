@@ -10,7 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { PlaidLink } from 'react-native-plaid-link-sdk';
+import { openLink } from 'react-native-plaid-link-sdk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -30,21 +30,32 @@ const ConnectBankScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isExchanging, setIsExchanging] = useState(false);
   const [selectedBank, setSelectedBank] = useState(null);
-  const [linkToken, setLinkToken] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
 
   const handleConnectBank = async () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
+      console.log('[ConnectBank] fetching link token...');
       const response = await createLinkToken();
-      const token = response.data?.linkToken || response.data?.link_token;
-      if (token) {
-        setLinkToken(token);
-      } else {
-        setErrorMessage('Something went wrong, try again');
+      console.log('[ConnectBank] response:', response.data);
+      const token = response.data?.link_token || response.data?.linkToken;
+      console.log('[ConnectBank] token received:', token);
+
+      if (!token) {
+        setErrorMessage('Could not connect. Try again.');
+        return;
       }
+
+      console.log('[ConnectBank] opening Plaid Link...');
+      openLink({
+        tokenConfig: { token, noLoadingState: false },
+        onSuccess: handlePlaidSuccess,
+        onExit: handlePlaidExit,
+      });
     } catch (err) {
+      console.log('[ConnectBank] error:', err.message);
+      console.log('[ConnectBank] error response:', err.response?.data);
       if (!err.response) {
         setErrorMessage('Check your connection');
       } else {
@@ -78,7 +89,6 @@ const ConnectBankScreen = ({ navigation }) => {
 
   const handlePlaidExit = useCallback(
     (exit) => {
-      setLinkToken(null);
       if (exit.error) {
         setErrorMessage('Bank connection cancelled. Please try again.');
       }
@@ -163,7 +173,7 @@ const ConnectBankScreen = ({ navigation }) => {
               styles.bankRow,
               selectedBank === bank.id && styles.bankRowSelected,
             ]}
-            onPress={() => setSelectedBank(bank.id)}
+            onPress={handleConnectBank}
           >
             <View style={[styles.bankIcon, { backgroundColor: bank.color + '22' }]}>
               <Text style={styles.bankEmoji}>{bank.icon}</Text>
@@ -188,43 +198,24 @@ const ConnectBankScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {linkToken ? (
-          <PlaidLink
-            tokenConfig={{ token: linkToken }}
-            onSuccess={handlePlaidSuccess}
-            onExit={handlePlaidExit}
+        <TouchableOpacity
+          style={styles.connectButton}
+          onPress={handleConnectBank}
+          disabled={isLoading}
+        >
+          <LinearGradient
+            colors={['#7c6aff', '#9b8aff']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.connectGradient}
           >
-            <View style={styles.connectButton}>
-              <LinearGradient
-                colors={['#7c6aff', '#9b8aff']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.connectGradient}
-              >
-                <Text style={styles.connectText}>Open Plaid Link ⚡</Text>
-              </LinearGradient>
-            </View>
-          </PlaidLink>
-        ) : (
-          <TouchableOpacity
-            style={styles.connectButton}
-            onPress={handleConnectBank}
-            disabled={isLoading}
-          >
-            <LinearGradient
-              colors={['#7c6aff', '#9b8aff']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.connectGradient}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.connectText}>Connect Bank Account ⚡</Text>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.connectText}>Connect Bank Account ⚡</Text>
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
 
         <Text style={styles.disclaimer}>
           By connecting your account, you agree to our Terms of Service and Privacy Policy. Your credentials are never stored.

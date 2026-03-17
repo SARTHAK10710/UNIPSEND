@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { UserProvider } from './src/context/UserContext';
 
 import SplashScreen from './src/screens/SplashScreen';
 import AuthScreen from './src/screens/AuthScreen';
@@ -76,9 +77,11 @@ export default function App() {
     <View style={styles.rootContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0a0f" translucent={false} />
       <AuthProvider>
-        <NavigationContainer theme={darkTheme}>
-          <AppNavigator />
-        </NavigationContainer>
+        <UserProvider>
+          <NavigationContainer theme={darkTheme}>
+            <AppNavigator />
+          </NavigationContainer>
+        </UserProvider>
       </AuthProvider>
     </View>
   );

@@ -75,8 +75,8 @@ const fetchAVQuote = async (symbol) => {
 
 // ─── ALPACA ROUTES ──────────────────────────────────────
 
-// GET /account
-app.get('/account', verifyToken, async (req, res) => {
+// GET /api/investments/alpaca/account
+app.get('/api/investments/alpaca/account', verifyToken, async (req, res) => {
   try {
     const account = await alpaca.getAccount();
     res.status(200).json({
@@ -99,8 +99,8 @@ app.get('/account', verifyToken, async (req, res) => {
   }
 });
 
-// GET /portfolio
-app.get('/portfolio', verifyToken, async (req, res) => {
+// GET /api/investments/alpaca/portfolio
+app.get('/api/investments/alpaca/portfolio', verifyToken, async (req, res) => {
   try {
     const positions = await alpaca.getPositions();
     const holdings = positions.map((pos) => ({
@@ -120,8 +120,8 @@ app.get('/portfolio', verifyToken, async (req, res) => {
   }
 });
 
-// GET /orders
-app.get('/orders', verifyToken, async (req, res) => {
+// GET /api/investments/alpaca/orders
+app.get('/api/investments/alpaca/orders', verifyToken, async (req, res) => {
   try {
     const orders = await alpaca.getOrders({ status: 'all', limit: 20 });
     const formatted = orders.map((o) => ({
@@ -142,10 +142,11 @@ app.get('/orders', verifyToken, async (req, res) => {
   }
 });
 
-// POST /order
-app.post('/order', verifyToken, async (req, res) => {
+// POST /api/investments/alpaca/order
+app.post('/api/investments/alpaca/order', verifyToken, async (req, res) => {
   try {
-    const { symbol, qty, side } = req.body;
+    const symbol = req.body.symbol?.trim().toUpperCase();
+    const { qty, side } = req.body;
 
     if (!symbol || !qty || !side) {
       return res.status(400).json({ error: 'symbol, qty, and side are required' });
@@ -157,32 +158,82 @@ app.post('/order', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'qty must be greater than 0' });
     }
 
+    // Indian stocks end with .BSE or .NSE — Alpaca does not support these
+    const indianSuffixes = ['.BSE', '.NSE', '.BO', '.NS'];
+    const knownIndianStocks = [
+      'RELIANCE', 'TCS', 'INFY', 'HDFC', 'ICICI', 'WIPRO', 'HCLTECH',
+      'BAJFINANCE', 'KOTAKBANK', 'SBIN', 'AXISBANK', 'MARUTI', 'TITAN',
+      'SUNPHARMA', 'TATAMOTORS', 'ADANIENT', 'ONGC', 'NTPC', 'POWERGRID',
+      'ULTRACEMCO', 'NIFTYBEES', 'JUNIORBEES',
+    ];
+    const isIndianStock =
+      indianSuffixes.some((s) => symbol.toUpperCase().endsWith(s)) ||
+      knownIndianStocks.includes(symbol.toUpperCase());
+
+    if (isIndianStock) {
+      console.log('[Alpaca] simulating Indian stock order:', symbol);
+      return res.status(200).json({
+        success: true,
+        simulated: true,
+        order: {
+          orderId: 'sim_' + Date.now(),
+          symbol,
+          qty: parseInt(qty),
+          side,
+          status: 'filled',
+          createdAt: new Date().toISOString(),
+          message: 'Simulated order for Indian market',
+        },
+      });
+    }
+
+    // Place real order on Alpaca for US stocks
     const order = await alpaca.createOrder({
       symbol,
       qty,
       side,
       type: 'market',
-      time_in_force: 'day',
+      time_in_force: 'gtc',
     });
 
     res.status(200).json({
-      orderId: order.id,
-      symbol: order.symbol,
-      qty: parseFloat(order.qty),
-      side: order.side,
-      status: order.status,
-      filledAt: order.filled_at,
+      success: true,
+      simulated: false,
+      order: {
+        orderId: order.id,
+        symbol: order.symbol,
+        qty: parseFloat(order.qty),
+        side: order.side,
+        status: order.status,
+        filledAt: order.filled_at,
+      },
     });
   } catch (error) {
     console.error('Create order error:', error.message);
-    res.status(500).json({ error: 'Failed to create order' });
+
+    if (error.message?.includes('not found') || error.message?.includes('asset')) {
+      return res.status(400).json({
+        error: `${req.body.symbol} is not available for trading on this platform`,
+        code: 'SYMBOL_NOT_FOUND',
+      });
+    }
+
+    if (error.message?.includes('insufficient')) {
+      return res.status(400).json({
+        error: 'Insufficient buying power',
+        code: 'INSUFFICIENT_FUNDS',
+      });
+    }
+
+    res.status(500).json({ error: 'Order failed: ' + error.message });
   }
 });
 
+
 // ─── ALPHA VANTAGE / MARKET ROUTES ──────────────────────
 
-// GET /market/price/:symbol
-app.get('/market/price/:symbol', verifyToken, async (req, res) => {
+// GET /api/investments/market/price/:symbol
+app.get('/api/investments/market/price/:symbol', verifyToken, async (req, res) => {
   try {
     const { symbol } = req.params;
     const cacheKey = `price:${symbol}`;
@@ -200,8 +251,8 @@ app.get('/market/price/:symbol', verifyToken, async (req, res) => {
   }
 });
 
-// GET /market/history/:symbol
-app.get('/market/history/:symbol', verifyToken, async (req, res) => {
+// GET /api/investments/market/history/:symbol
+app.get('/api/investments/market/history/:symbol', verifyToken, async (req, res) => {
   try {
     const { symbol } = req.params;
     const cacheKey = `history:${symbol}`;
@@ -233,8 +284,8 @@ app.get('/market/history/:symbol', verifyToken, async (req, res) => {
   }
 });
 
-// GET /market/movers
-app.get('/market/movers', verifyToken, async (req, res) => {
+// GET /api/investments/market/movers
+app.get('/api/investments/market/movers', verifyToken, async (req, res) => {
   try {
     const symbols = ['SPY', 'AAPL', 'RELIANCE.BSE', 'TCS.BSE', 'BTC'];
     const cacheKey = 'market:movers';
@@ -265,8 +316,8 @@ app.get('/market/movers', verifyToken, async (req, res) => {
   }
 });
 
-// GET /market/search/:query
-app.get('/market/search/:query', verifyToken, async (req, res) => {
+// GET /api/investments/market/search/:query
+app.get('/api/investments/market/search/:query', verifyToken, async (req, res) => {
   try {
     const { query } = req.params;
     const cacheKey = `search:${query}`;

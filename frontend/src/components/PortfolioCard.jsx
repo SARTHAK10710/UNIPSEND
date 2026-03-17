@@ -18,6 +18,19 @@ const PLATFORM_STYLE = {
 
 const formatInr = (value) => `₹${Number(value || 0).toFixed(2)}`;
 
+const getTradingInfo = (symbol) => {
+  const indianSuffixes = ['.BSE', '.NSE', '.BO', '.NS'];
+  const cryptoSymbols = ['BTC', 'ETH', 'DOGE', 'SOL'];
+  const indianStocks = ['RELIANCE', 'TCS', 'INFY', 'NIFTYBEES'];
+  if (cryptoSymbols.includes(symbol)) {
+    return { label: 'Crypto', color: '#ffd166', note: 'Use Binance to trade' };
+  }
+  if (indianSuffixes.some((s) => symbol.endsWith(s)) || indianStocks.includes(symbol)) {
+    return { label: 'NSE/BSE', color: '#4effd6', note: 'Simulated trading only' };
+  }
+  return { label: 'NYSE/NASDAQ', color: '#7c6aff', note: 'Paper trading on Alpaca' };
+};
+
 const PortfolioCard = ({
   symbol,
   companyName,
@@ -83,6 +96,9 @@ const PortfolioCard = ({
             {formatInr(pnl)}
           </Text>
         </View>
+        <Text style={[styles.tradingNote, { color: getTradingInfo(symbol).color }]}>
+          {getTradingInfo(symbol).note}
+        </Text>
       </Pressable>
     </Animated.View>
   );
@@ -173,6 +189,12 @@ const styles = StyleSheet.create({
   pnl: {
     fontSize: 12,
     fontFamily: 'SpaceMono-Bold',
+  },
+  tradingNote: {
+    fontSize: 10,
+    fontFamily: 'SpaceMono',
+    marginTop: 6,
+    opacity: 0.7,
   },
 });
 

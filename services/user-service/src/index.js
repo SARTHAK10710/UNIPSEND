@@ -67,8 +67,8 @@ function getRiskLabel(score) {
   return 'Aggressive';
 }
 
-// GET /me
-app.get('/me', verifyToken, async (req, res) => {
+// GET /api/user/me
+app.get('/api/user/me', verifyToken, async (req, res) => {
   try {
     let result = await pool.query(
       'SELECT * FROM users WHERE firebase_uid = $1',
@@ -91,8 +91,8 @@ app.get('/me', verifyToken, async (req, res) => {
   }
 });
 
-// PUT /me
-app.put('/me', verifyToken, async (req, res) => {
+// PUT /api/user/me
+app.put('/api/user/me', verifyToken, async (req, res) => {
   try {
     const { first_name, last_name } = req.body;
 
@@ -117,8 +117,8 @@ app.put('/me', verifyToken, async (req, res) => {
   }
 });
 
-// POST /fcm-token
-app.post('/fcm-token', verifyToken, async (req, res) => {
+// POST /api/user/fcm-token
+app.post('/api/user/fcm-token', verifyToken, async (req, res) => {
   try {
     const { token } = req.body;
     await pool.query(
@@ -132,8 +132,8 @@ app.post('/fcm-token', verifyToken, async (req, res) => {
   }
 });
 
-// GET /risk-score
-app.get('/risk-score', verifyToken, async (req, res) => {
+// GET /api/user/risk-score
+app.get('/api/user/risk-score', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT risk_score, segment FROM users WHERE firebase_uid = $1',
@@ -156,8 +156,8 @@ app.get('/risk-score', verifyToken, async (req, res) => {
   }
 });
 
-// PUT /risk-score
-app.put('/risk-score', verifyToken, async (req, res) => {
+// PUT /api/user/risk-score
+app.put('/api/user/risk-score', verifyToken, async (req, res) => {
   try {
     const { risk_score, segment } = req.body;
     await pool.query(

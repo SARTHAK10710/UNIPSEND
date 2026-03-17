@@ -86,8 +86,8 @@ const registerUser = async (uid, email, name) => {
   return result.rows[0];
 };
 
-// POST /register
-app.post('/register', verifyToken, async (req, res) => {
+// POST /api/auth/register
+app.post('/api/auth/register', verifyToken, async (req, res) => {
   try {
     const user = await registerUser(req.user.uid, req.user.email, req.user.name);
     res.status(200).json({ success: true, user });
@@ -97,8 +97,8 @@ app.post('/register', verifyToken, async (req, res) => {
   }
 });
 
-// GET /me
-app.get('/me', verifyToken, async (req, res) => {
+// GET /api/auth/me
+app.get('/api/auth/me', verifyToken, async (req, res) => {
   try {
     let result = await pool.query(
       'SELECT * FROM users WHERE firebase_uid = $1',
@@ -117,8 +117,8 @@ app.get('/me', verifyToken, async (req, res) => {
   }
 });
 
-// DELETE /account
-app.delete('/account', verifyToken, async (req, res) => {
+// DELETE /api/auth/account
+app.delete('/api/auth/account', verifyToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM users WHERE firebase_uid = $1', [req.user.uid]);
     await admin.auth().deleteUser(req.user.uid);

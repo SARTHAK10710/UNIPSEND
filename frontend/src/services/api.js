@@ -2,8 +2,9 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { auth } from "./firebase";
 
-// Use localhost:3000 with adb reverse for emulators, or machine's local IP for physical devices
-const API_BASE_URL = "http://localhost:3000";
+// Use machine's local IP for physical devices over WiFi
+// For emulators, use localhost:3000 with adb reverse
+const API_BASE_URL = "http://192.168.1.3:3000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -59,14 +60,14 @@ export const aiAPI = {
 };
 
 export const investmentAPI = {
-  getAccount: () => api.get("/api/investments/account"),
-  getPortfolio: () => api.get("/api/investments/portfolio"),
+  getAccount: () => api.get("/api/investments/alpaca/account"),
+  getPortfolio: () => api.get("/api/investments/alpaca/portfolio"),
   getMovers: () => api.get("/api/investments/market/movers"),
-  getOrders: () => api.get("/api/investments/orders"),
+  getOrders: () => api.get("/api/investments/alpaca/orders"),
   getPrice: (symbol) => api.get(`/api/investments/market/price/${symbol}`),
   getHistory: (symbol) => api.get(`/api/investments/market/history/${symbol}`),
   search: (query) => api.get(`/api/investments/market/search/${query}`),
-  placeOrder: (data) => api.post("/api/investments/order", data),
+  placeOrder: (data) => api.post("/api/investments/alpaca/order", data),
 };
 
 export const subscriptionAPI = {

@@ -53,8 +53,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// POST /link-token
-app.post('/link-token', verifyToken, async (req, res) => {
+// POST /api/plaid/link-token
+app.post('/api/plaid/link-token', verifyToken, async (req, res) => {
   try {
     const response = await plaidClient.linkTokenCreate({
       client_name: 'Unispend',
@@ -64,15 +64,19 @@ app.post('/link-token', verifyToken, async (req, res) => {
       language: 'en',
     });
 
+    console.log('[Plaid] link token created successfully');
     res.status(200).json({ link_token: response.data.link_token });
   } catch (error) {
-    console.error('Create link token error:', error.response?.data || error);
-    res.status(500).json({ error: 'Failed to create link token' });
+    console.error('[Plaid] link token error:', error.response?.data || error.message);
+    res.status(500).json({
+      error: 'Failed to create link token',
+      details: error.response?.data || error.message,
+    });
   }
 });
 
-// POST /exchange-token
-app.post('/exchange-token', verifyToken, async (req, res) => {
+// POST /api/plaid/exchange-token
+app.post('/api/plaid/exchange-token', verifyToken, async (req, res) => {
   try {
     const { public_token } = req.body;
 
@@ -93,13 +97,17 @@ app.post('/exchange-token', verifyToken, async (req, res) => {
   }
 });
 
-// GET /transactions
-app.get('/transactions', verifyToken, async (req, res) => {
+// GET /api/plaid/transactions
+app.get('/api/plaid/transactions', verifyToken, async (req, res) => {
   try {
-    const cacheKey = `transactions:${req.user.uid}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      return res.status(200).json(JSON.parse(cached));
+    const cacheKey = 'transactions:' + req.user.uid;
+
+    if (req.query.refresh !== 'true') {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        console.log('[Plaid] returning cached transactions');
+        return res.status(200).json(JSON.parse(cached));
+      }
     }
 
     const userResult = await pool.query(
@@ -107,16 +115,53 @@ app.get('/transactions', verifyToken, async (req, res) => {
       [req.user.uid]
     );
 
-    if (userResult.rows.length === 0 || !userResult.rows[0].plaid_access_token) {
-      return res.status(200).json({ transactions: [], count: 0, message: 'No bank connected' });
+    if (!userResult.rows[0]?.plaid_access_token) {
+      return res.status(200).json({
+        transactions: [],
+        count: 0,
+        connected: false,
+        message: 'No bank connected',
+      });
     }
 
     const accessToken = userResult.rows[0].plaid_access_token;
+    console.log('[Plaid] fetching transactions with cursor loop...');
 
-    const response = await plaidClient.transactionsSync({ access_token: accessToken });
-    const transactions = response.data.added || [];
+    // CURSOR LOOP - fetches ALL transactions
+    let cursor = null;
+    let allTransactions = [];
+    let hasMore = true;
+    let iterations = 0;
 
-    for (const txn of transactions) {
+    while (hasMore && iterations < 10) {
+      const request = { access_token: accessToken };
+      if (cursor) request.cursor = cursor;
+
+      const response = await plaidClient.transactionsSync(request);
+
+      console.log('[Plaid] iteration', iterations,
+        'added:', response.data.added.length,
+        'has_more:', response.data.has_more);
+
+      allTransactions = [
+        ...allTransactions,
+        ...response.data.added,
+      ];
+
+      hasMore = response.data.has_more;
+      cursor = response.data.next_cursor;
+      iterations++;
+    }
+
+    console.log('[Plaid] total transactions fetched:', allTransactions.length);
+
+    // store cursor in redis for incremental sync
+    if (cursor) {
+      await redis.set('plaid_cursor:' + req.user.uid, cursor);
+    }
+
+    // store in postgres
+    for (const txn of allTransactions) {
       await pool.query(
         `INSERT INTO transactions
          (firebase_uid, plaid_transaction_id, amount, category, subcategory, merchant_name, date, account_id, pending)
@@ -127,13 +172,13 @@ app.get('/transactions', verifyToken, async (req, res) => {
         [
           req.user.uid,
           txn.transaction_id,
-          Math.abs(txn.amount),
-          txn.personal_finance_category?.primary || txn.category?.[0] || 'Other',
+          txn.amount,
+          txn.personal_finance_category?.primary || txn.category?.[0] || 'GENERAL_MERCHANDISE',
           txn.personal_finance_category?.detailed || txn.category?.[1] || null,
-          txn.merchant_name || null,
+          txn.merchant_name || txn.name || null,
           txn.date,
           txn.account_id || null,
-          txn.pending,
+          txn.pending || false,
         ]
       );
     }
@@ -143,18 +188,26 @@ app.get('/transactions', verifyToken, async (req, res) => {
       [req.user.uid]
     );
 
-    const payload = { transactions: result.rows, count: result.rows.length };
+    const payload = {
+      transactions: result.rows,
+      count: result.rows.length,
+      connected: true,
+    };
+
     await redis.set(cacheKey, JSON.stringify(payload), 'EX', 300);
 
     res.status(200).json(payload);
   } catch (error) {
-    console.error('Get transactions error:', error.response?.data || error);
-    res.status(500).json({ error: 'Failed to fetch transactions' });
+    console.error('[Plaid] transactions error:', error.response?.data || error.message);
+    res.status(500).json({
+      error: 'Failed to fetch transactions',
+      details: error.message,
+    });
   }
 });
 
-// GET /balance
-app.get('/balance', verifyToken, async (req, res) => {
+// GET /api/plaid/balance
+app.get('/api/plaid/balance', verifyToken, async (req, res) => {
   try {
     const userResult = await pool.query(
       'SELECT plaid_access_token FROM users WHERE firebase_uid = $1',
@@ -187,8 +240,8 @@ app.get('/balance', verifyToken, async (req, res) => {
   }
 });
 
-// POST /processor-token
-app.post('/processor-token', verifyToken, async (req, res) => {
+// POST /api/plaid/processor-token
+app.post('/api/plaid/processor-token', verifyToken, async (req, res) => {
   try {
     const { account_id, processor } = req.body;
 
@@ -198,7 +251,7 @@ app.post('/processor-token', verifyToken, async (req, res) => {
     );
 
     if (userResult.rows.length === 0 || !userResult.rows[0].plaid_access_token) {
-      return res.status(200).json({ data: [], error: placeholder, message: 'No linked bank account found' });
+      return res.status(404).json({ error: 'No linked bank account found' });
     }
 
     const response = await plaidClient.processorTokenCreate({

@@ -12,6 +12,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { useProfile } from '../hooks/useProfile';
 import { useAuth } from '../context/AuthContext';
+import { useUser } from '../context/UserContext';
 
 const { width } = Dimensions.get('window');
 
@@ -31,16 +32,26 @@ const SettingRow = ({ icon, title, subtitle, onPress, showArrow = true }) => (
 const ProfileScreen = ({ navigation }) => {
   const { logout } = useAuth();
   const {
-    profile,
-    riskScore,
-    riskLabel,
-    segment,
     emergencyFund,
     connectedAccounts,
     loading,
     refreshing,
     onRefresh,
   } = useProfile();
+  const {
+    getFullName,
+    getInitials,
+    getEmail,
+    getRiskScore,
+    getRiskLabelText,
+    getRiskSegment,
+    isBankConnected,
+    updateProfile,
+  } = useUser();
+
+  const riskScore = getRiskScore();
+  const riskLabel = getRiskLabelText();
+  const segment = getRiskSegment();
 
   const handleLogout = () => {
     Alert.alert(
@@ -61,12 +72,7 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const riskColor = riskScore < 40 ? '#4effd6' : riskScore < 70 ? '#ffd166' : '#ff6b6b';
-  const initials = (profile?.name || '')
-    .split(' ')
-    .map((n) => n?.[0] || '')
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || '?';
+  const initials = getInitials();
 
   return (
     <View style={styles.container}>
@@ -90,8 +96,8 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.avatarLarge}>
             <Text style={styles.avatarInitials}>{initials}</Text>
           </View>
-          <Text style={styles.profileName}>{profile?.name || ''}</Text>
-          <Text style={styles.profileEmail}>{profile?.email || ''}</Text>
+          <Text style={styles.profileName}>{getFullName()}</Text>
+          <Text style={styles.profileEmail}>{getEmail()}</Text>
           <View style={styles.memberBadge}>
             <Text style={styles.memberText}>{segment ? `🌟 ${segment}` : ''}</Text>
           </View>

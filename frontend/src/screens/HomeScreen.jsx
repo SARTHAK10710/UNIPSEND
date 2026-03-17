@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useHome } from '../hooks/useHome';
+import { useUser } from '../context/UserContext';
 
 const { width } = Dimensions.get('window');
 
@@ -81,7 +82,6 @@ const InsightCard = ({ title, message, icon }) => (
 
 const HomeScreen = ({ navigation }) => {
   const {
-    userName,
     balance,
     kpis,
     spendingTrend,
@@ -92,6 +92,8 @@ const HomeScreen = ({ navigation }) => {
     refreshing,
     onRefresh,
   } = useHome();
+  const { getFirstName } = useUser();
+  const userName = getFirstName();
 
   if (loading) {
     return (

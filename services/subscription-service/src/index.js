@@ -71,11 +71,11 @@ app.use(helmet());
 app.use(morgan('dev'));
 
 // Raw body needed for webhook signature verification
-app.use('/webhooks/scribeup', express.raw({ type: 'application/json' }));
+app.use('/api/subscriptions/webhooks/scribeup', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
-// POST /scribeup/init
-app.post('/scribeup/init', async (req, res) => {
+// POST /api/subscriptions/scribeup/init
+app.post('/api/subscriptions/scribeup/init', async (req, res) => {
   try {
     const { user_id, email, first_name, last_name } = req.body;
 
@@ -115,8 +115,8 @@ app.post('/scribeup/init', async (req, res) => {
   }
 });
 
-// GET /rewards
-app.get('/rewards', async (req, res) => {
+// GET /api/subscriptions/rewards
+app.get('/api/subscriptions/rewards', async (req, res) => {
   try {
     if (voucherify) {
       const campaigns = await voucherify.campaigns.list();
@@ -141,8 +141,8 @@ app.get('/rewards', async (req, res) => {
   }
 });
 
-// POST /rewards/redeem
-app.post('/rewards/redeem', async (req, res) => {
+// POST /api/subscriptions/rewards/redeem
+app.post('/api/subscriptions/rewards/redeem', async (req, res) => {
   try {
     const { voucher_code, user_id, amount } = req.body;
 
@@ -167,8 +167,8 @@ app.post('/rewards/redeem', async (req, res) => {
   }
 });
 
-// GET /rewards/history
-app.get('/rewards/history', async (req, res) => {
+// GET /api/subscriptions/rewards/history
+app.get('/api/subscriptions/rewards/history', async (req, res) => {
   try {
     if (voucherify) {
       const list = await voucherify.redemptions.list();
@@ -181,8 +181,8 @@ app.get('/rewards/history', async (req, res) => {
   }
 });
 
-// POST /webhooks/scribeup (kept with full path since it's a webhook callback)
-app.post('/webhooks/scribeup', async (req, res) => {
+// POST /api/subscriptions/webhooks/scribeup
+app.post('/api/subscriptions/webhooks/scribeup', async (req, res) => {
   try {
     const signature = req.headers['x-webhook-signature'];
     const timestamp = req.headers['x-webhook-timestamp'];
@@ -219,7 +219,7 @@ app.post('/webhooks/scribeup', async (req, res) => {
   }
 });
 
-// GET /v1/users/:user_id/processor_tokens (kept full path)
+// GET /v1/users/:user_id/processor_tokens
 app.get('/v1/users/:user_id/processor_tokens', async (req, res) => {
   res.status(200).json({
     data: { plaid_processor_tokens: [] },
@@ -233,7 +233,7 @@ app.get('/health', (req, res) => {
 
 // 404 handler
 app.use((req, res) => {
-  res.status(200).json({ data: [], error: placeholder, message: `Route ${req.method} ${req.path} not found` });
+  res.status(200).json({ data: [], message: `Route ${req.method} ${req.path} not found` });
 });
 
 // Global error handler

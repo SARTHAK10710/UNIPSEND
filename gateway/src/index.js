@@ -33,6 +33,7 @@ const services = [
   { path: "/api/subscriptions", target: "http://subscription-service:3004" },
   { path: "/api/notify", target: "http://notification-service:3005" },
   { path: "/api/user", target: "http://user-service:3006" },
+  { path: "/api/ai", target: "https://unispend-ai.onrender.com" },
 ];
 
 for (const { path, target } of services) {

@@ -1,6 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { userAPI, plaidAPI } from '../services/api';
+import { userAPI } from '../services/api';
+import useTransactions from './useTransactions';
+import useAllInsights from './useAllInsights';
 import { filterByMonth } from '../utils/dataTransformers';
 
 const ACCOUNT_ICONS = { depository: '🏦', credit: '💳', investment: '📈', loan: '🏛️' };
@@ -8,24 +10,71 @@ const ACCOUNT_COLORS = { depository: '#1a73e8', credit: '#ff6b6b', investment: '
 
 export const useProfile = () => {
   const { user } = useAuth();
+  const {
+    accounts,
+    transactions,
+    getTotalBalance,
+    isLoading: txnLoading,
+  } = useTransactions();
+
+  const {
+    getHealthScore,
+    getSpenderType,
+    isLoading: insightsLoading,
+  } = useAllInsights();
 
   const [profile, setProfile] = useState(null);
   const [riskScore, setRiskScore] = useState(null);
   const [riskLabel, setRiskLabel] = useState(null);
   const [segment, setSegment] = useState(null);
-  const [emergencyFund, setEmergencyFund] = useState(null);
-  const [connectedAccounts, setConnectedAccounts] = useState([]);
 
   const [profileLoading, setProfileLoading] = useState(true);
   const [riskLoading, setRiskLoading] = useState(true);
-  const [accountsLoading, setAccountsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+
+  const connectedAccounts = useMemo(() => {
+    if (!accounts || accounts.length === 0) return [];
+    return accounts.map((acc) => ({
+      name: acc.name || acc.official_name || 'Account',
+      type: acc.subtype || acc.type || 'Account',
+      icon: ACCOUNT_ICONS[acc.type] || '🏦',
+      color: ACCOUNT_COLORS[acc.type] || '#1a73e8',
+      connected: true,
+      balance: acc.current,
+      available: acc.available,
+    }));
+  }, [accounts]);
+
+  const emergencyFund = useMemo(() => {
+    if (!accounts || accounts.length === 0) return null;
+
+    const savingsAccount = accounts.find(
+      (a) => a.subtype === 'savings' || a.type === 'depository'
+    );
+    const savingsBalance = savingsAccount?.current || 0;
+
+    const now = new Date();
+    const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+    const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    const lastMonthTxs = filterByMonth(transactions, lastMonth, lastMonthYear);
+    const monthlySpend = lastMonthTxs.reduce(
+      (sum, tx) => sum + Math.abs(tx.amount || 0), 0
+    );
+
+    const emergencyTarget = monthlySpend * 6;
+    return {
+      current: Math.round(savingsBalance),
+      target: Math.round(emergencyTarget) || 1,
+      percent: emergencyTarget > 0
+        ? Math.round((savingsBalance / emergencyTarget) * 100)
+        : 0,
+    };
+  }, [accounts, transactions]);
 
   const fetchProfile = useCallback(async () => {
     setProfileLoading(true);
     try {
-      console.log('[useProfile] fetching profile...');
       const res = await userAPI.getProfile();
       const data = res.data;
       setProfile({
@@ -34,7 +83,6 @@ export const useProfile = () => {
         firstName: data.first_name,
         lastName: data.last_name,
       });
-      console.log('[useProfile] profile loaded:', data);
     } catch (err) {
       console.error('[useProfile] fetchProfile error:', err.message);
       setProfile({
@@ -49,13 +97,11 @@ export const useProfile = () => {
   const fetchRiskScore = useCallback(async () => {
     setRiskLoading(true);
     try {
-      console.log('[useProfile] fetching risk score...');
       const res = await userAPI.getRiskScore();
       const data = res.data;
       setRiskScore(data.risk_score);
       setRiskLabel(data.label);
       setSegment(data.segment);
-      console.log('[useProfile] risk score loaded:', data);
     } catch (err) {
       console.error('[useProfile] fetchRiskScore error:', err.message);
       setRiskScore(null);
@@ -65,66 +111,21 @@ export const useProfile = () => {
     }
   }, []);
 
-  const fetchAccounts = useCallback(async () => {
-    setAccountsLoading(true);
-    try {
-      console.log('[useProfile] fetching connected accounts...');
-      const res = await plaidAPI.getBalance();
-      const accounts = res.data?.accounts || [];
-
-      const formatted = accounts.map((acc) => ({
-        name: acc.name || acc.official_name || 'Account',
-        type: acc.subtype || acc.type || 'Account',
-        icon: ACCOUNT_ICONS[acc.type] || '🏦',
-        color: ACCOUNT_COLORS[acc.type] || '#1a73e8',
-        connected: true,
-        balance: acc.current,
-        available: acc.available,
-      }));
-      setConnectedAccounts(formatted);
-      console.log('[useProfile] accounts loaded:', formatted.length);
-
-      const savingsAccount = accounts.find((a) => a.subtype === 'savings' || a.type === 'depository');
-      const savingsBalance = savingsAccount?.current || 0;
-
-      const txRes = await plaidAPI.getTransactions();
-      const txs = txRes.data?.transactions || [];
-      const now = new Date();
-      const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-      const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-      const lastMonthTxs = filterByMonth(txs, lastMonth, lastMonthYear);
-      const monthlySpend = lastMonthTxs.reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0);
-
-      const emergencyTarget = monthlySpend * 6;
-      setEmergencyFund({
-        current: Math.round(savingsBalance),
-        target: Math.round(emergencyTarget) || 1,
-        percent: emergencyTarget > 0 ? Math.round((savingsBalance / emergencyTarget) * 100) : 0,
-      });
-    } catch (err) {
-      console.error('[useProfile] fetchAccounts error:', err.message);
-      setConnectedAccounts([]);
-      setEmergencyFund(null);
-    } finally {
-      setAccountsLoading(false);
-    }
-  }, []);
-
   const fetchAll = useCallback(async () => {
     setError(null);
     try {
-      await Promise.all([fetchProfile(), fetchRiskScore(), fetchAccounts()]);
+      await Promise.allSettled([fetchProfile(), fetchRiskScore()]);
     } catch (err) {
       setError('Failed to load profile data');
       console.error('[useProfile] fetchAll error:', err.message);
     }
-  }, [fetchProfile, fetchRiskScore, fetchAccounts]);
+  }, [fetchProfile, fetchRiskScore]);
 
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
-  const isLoading = profileLoading && riskLoading && accountsLoading;
+  const isLoading = profileLoading && riskLoading && txnLoading;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -139,6 +140,9 @@ export const useProfile = () => {
     segment,
     emergencyFund,
     connectedAccounts,
+    healthScore: getHealthScore(),
+    spenderType: getSpenderType(),
+    totalBalance: getTotalBalance(),
     loading: isLoading,
     refreshing,
     onRefresh,

@@ -25,8 +25,8 @@ app.use(helmet());
 app.use(morgan('dev'));
 app.use(express.json());
 
-// POST /single
-app.post('/single', async (req, res) => {
+// POST /api/notify/single
+app.post('/api/notify/single', async (req, res) => {
   try {
     const { fcm_token, title, body, screen } = req.body;
 
@@ -43,8 +43,8 @@ app.post('/single', async (req, res) => {
   }
 });
 
-// POST /budget-alert
-app.post('/budget-alert', async (req, res) => {
+// POST /api/notify/budget-alert
+app.post('/api/notify/budget-alert', async (req, res) => {
   try {
     const { fcm_token, percentage } = req.body;
 
@@ -64,8 +64,8 @@ app.post('/budget-alert', async (req, res) => {
   }
 });
 
-// POST /renewal
-app.post('/renewal', async (req, res) => {
+// POST /api/notify/renewal
+app.post('/api/notify/renewal', async (req, res) => {
   try {
     const { fcm_token, merchant, days } = req.body;
 
@@ -85,8 +85,8 @@ app.post('/renewal', async (req, res) => {
   }
 });
 
-// POST /investment
-app.post('/investment', async (req, res) => {
+// POST /api/notify/investment
+app.post('/api/notify/investment', async (req, res) => {
   try {
     const { fcm_token, symbol, pnl } = req.body;
 
@@ -106,8 +106,8 @@ app.post('/investment', async (req, res) => {
   }
 });
 
-// POST /bulk
-app.post('/bulk', async (req, res) => {
+// POST /api/notify/bulk
+app.post('/api/notify/bulk', async (req, res) => {
   try {
     const { tokens, title, body } = req.body;
 
