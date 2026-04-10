@@ -23,7 +23,7 @@ const POPULAR_BANKS = [
 ];
 
 const ConnectBankScreen = ({ navigation }) => {
-  const { setHasConnectedBank, setSkippedBank } = useAuth();
+  const { setHasConnectedBank, setSkippedBank, logout } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isExchanging, setIsExchanging] = useState(false);
   const [selectedBank, setSelectedBank] = useState(null);
@@ -125,7 +125,16 @@ const ConnectBankScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                // ConnectBank is the root screen — go back to Auth
+                logout();
+              }
+            }}
+          >
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Unispend</Text>
