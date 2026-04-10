@@ -78,6 +78,7 @@ const ConnectBankScreen = ({ navigation }) => {
         await plaidAPI.exchangeToken(success.publicToken);
         await AsyncStorage.setItem('bankSetupCompleted', 'true');
         setIsLinked(true);
+        setIsExchanging(false);
         setHasConnectedBank(true);
         // AppNavigator will automatically switch to MainTabs
       } catch (err) {
