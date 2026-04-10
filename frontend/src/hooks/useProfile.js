@@ -2,12 +2,14 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { userAPI, plaidAPI } from '../services/api';
 import { filterByMonth } from '../utils/dataTransformers';
+import { useAIInsights } from './useAIInsights';
 
 const ACCOUNT_ICONS = { depository: '🏦', credit: '💳', investment: '📈', loan: '🏛️' };
 const ACCOUNT_COLORS = { depository: '#1a73e8', credit: '#ff6b6b', investment: '#4effd6', loan: '#ffd166' };
 
 export const useProfile = () => {
   const { user } = useAuth();
+  const ai = useAIInsights();
 
   const [profile, setProfile] = useState(null);
   const [riskScore, setRiskScore] = useState(null);
@@ -144,5 +146,13 @@ export const useProfile = () => {
     onRefresh,
     error,
     refresh: fetchAll,
+
+    // AI data
+    aiSpenderType: ai.getSpenderType(),
+    aiRiskScore: ai.getRiskScorePercent(),
+    aiHealthScore: ai.getHealthScore(),
+    aiCashflow: ai.getCashflow(),
+    aiLoading: ai.isLoading,
+    aiAvailable: ai.apiAvailable,
   };
 };

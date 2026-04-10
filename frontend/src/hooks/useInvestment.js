@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { investmentAPI, userAPI } from '../services/api';
+import { useAIInsights } from './useAIInsights';
+import { usePortfolio } from './usePortfolio';
 
 const CRYPTO_SYMBOLS = ['BTC', 'ETH', 'DOGE', 'SOL', 'ADA', 'XRP', 'MATIC', 'DOT', 'AVAX', 'LINK'];
 
@@ -38,6 +40,7 @@ const calculateAllocation = (holdings) => {
 };
 
 export const useInvestment = () => {
+  const ai = useAIInsights();
   const [account, setAccount] = useState(null);
   const [holdings, setHoldings] = useState([]);
   const [movers, setMovers] = useState(null);
@@ -175,6 +178,12 @@ export const useInvestment = () => {
     fetchAll();
   }, [fetchAll]);
 
+  // AI portfolio — depends on monthly estimate + health score
+  const aiPortfolio = usePortfolio(
+    ai.getMonthlyEstimate(),
+    ai.getHealthScore(),
+  );
+
   return {
     account,
     holdings,
@@ -193,5 +202,13 @@ export const useInvestment = () => {
     placeOrder,
     fetchStockHistory,
     refresh: fetchAll,
+
+    // AI data
+    aiPortfolio: aiPortfolio.portfolio,
+    aiPortfolioLoading: aiPortfolio.isLoading,
+    investmentAdvice: ai.getInvestmentAdvice(),
+    aiHealthScore: ai.getHealthScore(),
+    aiLoading: ai.isLoading,
+    aiAvailable: ai.apiAvailable,
   };
 };

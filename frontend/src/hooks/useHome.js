@@ -3,9 +3,11 @@ import { useAuth } from '../context/AuthContext';
 import { plaidAPI } from '../services/api';
 import { formatCurrency } from '../utils/formatCurrency';
 import { groupByCategory, groupByRecentDays, mapCategory } from '../utils/dataTransformers';
+import { useAIInsights } from './useAIInsights';
 
 export const useHome = () => {
   const { user } = useAuth();
+  const ai = useAIInsights();
 
   const [balance, setBalance] = useState(null);
   const [spent, setSpent] = useState(0);
@@ -94,12 +96,10 @@ export const useHome = () => {
   const fetchAll = useCallback(async () => {
     setError(null);
     try {
-      const [balResult, txResult] = await Promise.allSettled([
+      await Promise.allSettled([
         fetchBalance(),
         fetchTransactions(),
       ]);
-
-      // setInsights([]) // AI service not ready yet
     } catch (err) {
       setError('Failed to load dashboard data');
       console.error('[useHome] fetchAll error:', err.message);
@@ -151,12 +151,27 @@ export const useHome = () => {
 
   const isLoading = balanceLoading && transactionsLoading;
 
+  // Populate insights from AI service
+  useEffect(() => {
+    if (!ai.isLoading && ai.apiAvailable) {
+      const aiSuggestions = ai.getSuggestions();
+      const mapped = (Array.isArray(aiSuggestions) ? aiSuggestions : []).map((s, i) => ({
+        id: `ai-${i}`,
+        text: typeof s === 'string' ? s : s.text || s.suggestion || String(s),
+        icon: '🤖',
+        type: 'ai',
+      }));
+      setInsights(mapped);
+    }
+  }, [ai.isLoading, ai.apiAvailable, ai.insights]);
+
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchAll();
+    ai.refresh();
     setRefreshing(false);
-  }, [fetchAll]);
+  }, [fetchAll, ai.refresh]);
 
   return {
     userName,
@@ -171,5 +186,11 @@ export const useHome = () => {
     onRefresh,
     error,
     refresh: fetchAll,
+
+    // AI data
+    healthScore: ai.getHealthScore(),
+    aiSpendingTrend: ai.getSpendingTrend(),
+    aiLoading: ai.isLoading,
+    aiAvailable: ai.apiAvailable,
   };
 };

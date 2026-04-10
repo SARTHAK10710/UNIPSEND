@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { plaidAPI } from '../services/api';
+import { useAIInsights } from './useAIInsights';
 import {
   groupByCategory,
   groupByRecentDays,
@@ -12,6 +13,7 @@ import {
 export const useSpending = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [allTransactions, setAllTransactions] = useState([]);
+  const ai = useAIInsights();
 
   const [dailyData, setDailyData] = useState([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
@@ -44,8 +46,14 @@ export const useSpending = () => {
     setHeatmapData(normalizeByDay(filtered));
     setMonthComparison(calculateMonthComparison(txs));
 
-    // AI suggestions not ready yet
-    setSuggestions([]);
+    // Populate AI suggestions
+    const aiSuggestions = ai.getSuggestions();
+    const mapped = (Array.isArray(aiSuggestions) ? aiSuggestions : []).map((s, i) => ({
+      id: `ai-sug-${i}`,
+      text: typeof s === 'string' ? s : s.text || s.suggestion || String(s),
+      savings: typeof s === 'object' ? s.savings || null : null,
+    }));
+    setSuggestions(mapped);
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -102,5 +110,11 @@ export const useSpending = () => {
     onRefresh,
     error,
     refresh: fetchData,
+
+    // AI data
+    topSpendingCategory: ai.getTopSpendingCategory(),
+    aiSpendingTrend: ai.getSpendingTrend(),
+    aiLoading: ai.isLoading,
+    aiAvailable: ai.apiAvailable,
   };
 };
