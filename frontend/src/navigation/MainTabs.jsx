@@ -8,6 +8,7 @@ import HomeScreen from '../screens/HomeScreen';
 import SpendingScreen from '../screens/SpendingScreen';
 import InvestmentScreen from '../screens/InvestmentScreen';
 import RewardsScreen from '../screens/RewardsScreen';
+import CopilotScreen from '../screens/CopilotScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
@@ -17,6 +18,7 @@ const TAB_ICONS = {
   Spending: { active: 'stats-chart', inactive: 'stats-chart-outline' },
   Invest: { active: 'wallet', inactive: 'wallet-outline' },
   Rewards: { active: 'gift', inactive: 'gift-outline' },
+  Copilot: { active: 'chatbubble-ellipses', inactive: 'chatbubble-ellipses-outline' },
   Profile: { active: 'person', inactive: 'person-outline' },
 };
 
@@ -78,6 +80,7 @@ const MainTabs = () => {
       <Tab.Screen name="Spending" component={SpendingScreen} />
       <Tab.Screen name="Invest" component={InvestmentScreen} />
       <Tab.Screen name="Rewards" component={RewardsScreen} />
+      <Tab.Screen name="Copilot" component={CopilotScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
