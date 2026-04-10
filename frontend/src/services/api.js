@@ -54,10 +54,6 @@ export const plaidAPI = {
     api.post("/api/plaid/exchange-token", { public_token: publicToken }),
 };
 
-export const aiAPI = {
-  getInsights: () => api.get("/api/ai/insights"),
-};
-
 export const investmentAPI = {
   getAccount: () => api.get("/api/investments/account"),
   getPortfolio: () => api.get("/api/investments/portfolio"),

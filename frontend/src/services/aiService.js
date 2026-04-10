@@ -189,8 +189,18 @@ const checkHealth = async () => {
     console.log('[AI] health check:', res.data);
     return res.data || { status: 'ok' };
   } catch (err) {
-    console.log('[AI] health check failed:', err.message);
-    return { status: 'offline' };
+    console.log('[AI] health check axios failed:', err.message, err.code);
+    // Fallback: try native fetch (bypasses axios interceptors / Flipper proxy)
+    try {
+      console.log('[AI] trying fetch fallback...');
+      const fetchRes = await fetch(`${AI_BASE_URL}/health`);
+      const data = await fetchRes.json();
+      console.log('[AI] fetch fallback succeeded:', data);
+      return data || { status: 'ok' };
+    } catch (fetchErr) {
+      console.log('[AI] fetch fallback also failed:', fetchErr.message);
+      return { status: 'offline' };
+    }
   }
 };
 

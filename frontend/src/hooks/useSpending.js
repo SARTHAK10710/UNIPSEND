@@ -47,15 +47,6 @@ export const useSpending = () => {
     setTopMerchants(groupByMerchant(filtered));
     setHeatmapData(normalizeByDay(filtered));
     setMonthComparison(calculateMonthComparison(txs));
-
-    // Populate AI suggestions
-    const aiSuggestions = ai.getSuggestions();
-    const mapped = (Array.isArray(aiSuggestions) ? aiSuggestions : []).map((s, i) => ({
-      id: `ai-sug-${i}`,
-      text: typeof s === 'string' ? s : s.text || s.suggestion || String(s),
-      savings: typeof s === 'object' ? s.savings || null : null,
-    }));
-    setSuggestions(mapped);
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -90,6 +81,20 @@ export const useSpending = () => {
       processTransactions(allTransactions, selectedMonth);
     }
   }, [selectedMonth, allTransactions, processTransactions]);
+
+  // Populate AI suggestions when AI finishes loading
+  useEffect(() => {
+    if (!ai.isLoading && ai.apiAvailable) {
+      const aiSuggestions = ai.getSuggestions();
+      const mapped = (Array.isArray(aiSuggestions) ? aiSuggestions : []).map((s, i) => ({
+        id: `ai-sug-${i}`,
+        text: typeof s === 'string' ? s : s.text || s.suggestion || String(s),
+        savings: typeof s === 'object' ? s.savings || null : null,
+      }));
+      console.log('[useSpending] AI suggestions loaded:', mapped.length);
+      setSuggestions(mapped);
+    }
+  }, [ai.isLoading, ai.apiAvailable, ai.insights]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
