@@ -13,6 +13,8 @@ import Svg, { Circle, G } from 'react-native-svg';
 import LinearGradient from 'react-native-linear-gradient';
 import { useProfile } from '../hooks/useProfile';
 import { useAuth } from '../context/AuthContext';
+import HealthScoreBadge from '../components/HealthScoreBadge';
+import SpenderTypeBadge from '../components/SpenderTypeBadge';
 
 const { width } = Dimensions.get('window');
 
@@ -41,6 +43,10 @@ const ProfileScreen = ({ navigation }) => {
     loading,
     refreshing,
     onRefresh,
+    aiSpenderType,
+    aiHealthScore,
+    aiLoading,
+    aiAvailable,
   } = useProfile();
 
   const handleLogout = () => {
@@ -97,6 +103,17 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.memberText}>{segment ? `🌟 ${segment}` : ''}</Text>
           </View>
         </View>
+
+        {/* AI Financial Intelligence */}
+        {!aiLoading && aiAvailable && (
+          <View style={styles.aiCard}>
+            <Text style={styles.cardTitle}>🤖 AI Financial Intelligence</Text>
+            <View style={styles.aiRow}>
+              <HealthScoreBadge score={aiHealthScore} />
+              <SpenderTypeBadge type={aiSpenderType} />
+            </View>
+          </View>
+        )}
 
         {/* Risk Score Gauge */}
         <View style={styles.riskCard}>
@@ -308,6 +325,20 @@ const styles = StyleSheet.create({
   logoutIcon: { fontSize: 18, marginRight: 8 },
   logoutText: { color: '#ff6b6b', fontSize: 16, fontWeight: '700' },
   versionText: { color: '#8884a8', fontSize: 12, textAlign: 'center', marginBottom: 10 },
+  aiCard: {
+    backgroundColor: '#17171f',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(124, 106, 255, 0.15)',
+  },
+  aiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+  },
 });
 
 export default ProfileScreen;

@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useHome } from '../hooks/useHome';
+import HealthScoreBadge from '../components/HealthScoreBadge';
+import AIUnavailableCard from '../components/AIUnavailableCard';
 
 const { width } = Dimensions.get('window');
 
@@ -91,6 +93,10 @@ const HomeScreen = ({ navigation }) => {
     loading,
     refreshing,
     onRefresh,
+    healthScore,
+    aiSpendingTrend,
+    aiLoading,
+    aiAvailable,
   } = useHome();
 
   if (loading) {
@@ -145,11 +151,24 @@ const HomeScreen = ({ navigation }) => {
           end={{ x: 1, y: 1 }}
           style={styles.balanceCard}
         >
-          <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceAmount}>{balance ? formatCurrency(balance.total) : '—'}</Text>
+          <View style={styles.balanceTopRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.balanceLabel}>Total Balance</Text>
+              <Text style={styles.balanceAmount}>{balance ? formatCurrency(balance.total) : '—'}</Text>
+            </View>
+            {!aiLoading && aiAvailable && (
+              <HealthScoreBadge score={healthScore} size="compact" />
+            )}
+          </View>
           <View style={styles.balanceTrend}>
-            <Text style={styles.trendIcon}>📈</Text>
-            <Text style={styles.trendText}>{balance ? `${(balance.accounts || []).length} linked accounts` : 'Connect a bank'}</Text>
+            <Text style={styles.trendIcon}>
+              {aiSpendingTrend === 'increasing' ? '📈' : aiSpendingTrend === 'decreasing' ? '📉' : '➡️'}
+            </Text>
+            <Text style={styles.trendText}>
+              {balance
+                ? `${(balance.accounts || []).length} linked accounts`
+                : 'Connect a bank'}
+            </Text>
           </View>
         </LinearGradient>
 
@@ -210,10 +229,19 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.insightsHeader}>
           <Text style={styles.insightsIcon}>✨</Text>
           <Text style={styles.sectionTitle}>AI Insights</Text>
+          {aiLoading && <ActivityIndicator size="small" color="#7c6aff" style={{ marginLeft: 8 }} />}
         </View>
-        {insights.map((insight, idx) => (
-          <InsightCard key={idx} {...insight} />
-        ))}
+        {!aiAvailable && !aiLoading ? (
+          <AIUnavailableCard onRetry={onRefresh} />
+        ) : insights.length > 0 ? (
+          insights.map((insight, idx) => (
+            <InsightCard key={idx} title={insight.text} message="" icon={insight.icon || '🤖'} />
+          ))
+        ) : !aiLoading ? (
+          <View style={styles.emptyInsights}>
+            <Text style={styles.emptyInsightsText}>No AI insights yet</Text>
+          </View>
+        ) : null}
 
         {/* Recent Transactions */}
         <View style={styles.txHeader}>
@@ -296,6 +324,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(78, 255, 214, 0.15)',
+  },
+  balanceTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   balanceLabel: {
     color: '#4effd6',
@@ -594,6 +627,18 @@ const styles = StyleSheet.create({
   txAmount: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  emptyInsights: {
+    backgroundColor: '#17171f',
+    borderRadius: 14,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  emptyInsightsText: {
+    color: '#8884a8',
+    fontSize: 13,
   },
 });
 

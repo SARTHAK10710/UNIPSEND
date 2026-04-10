@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useInvestment } from '../hooks/useInvestment';
+import AIPortfolioCard from '../components/AIPortfolioCard';
 
 const { width } = Dimensions.get('window');
 
@@ -60,6 +61,10 @@ const InvestmentScreen = () => {
     error,
     placeOrder,
     refresh,
+    aiPortfolio,
+    aiPortfolioLoading,
+    investmentAdvice,
+    aiAvailable,
   } = useInvestment();
 
   const riskScore = riskProfile?.risk_score || 0;
@@ -194,6 +199,13 @@ const InvestmentScreen = () => {
             </View>
           </View>
         </View>
+
+        {/* AI Portfolio Recommendation */}
+        {aiAvailable && aiPortfolio && aiPortfolio.length > 0 && (
+          <View style={{ marginBottom: 16 }}>
+            <AIPortfolioCard portfolio={aiPortfolio} advice={investmentAdvice} />
+          </View>
+        )}
 
         {/* Invest Button */}
         <TouchableOpacity style={styles.investButton} onPress={() => setShowOrderModal(!showOrderModal)}>

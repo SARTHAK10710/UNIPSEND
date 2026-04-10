@@ -29,6 +29,10 @@ const SpendingScreen = () => {
     loading,
     refreshing,
     onRefresh,
+    topSpendingCategory,
+    aiSpendingTrend,
+    aiLoading,
+    aiAvailable,
   } = useSpending();
 
   const maxDaily = Math.max(...dailyData.map((d) => d.amount), 1);
@@ -46,12 +50,14 @@ const SpendingScreen = () => {
 
   const renderSuggestion = ({ item }) => (
     <View style={styles.suggestionCard}>
-      <Text style={styles.suggestionIcon}>{item.icon}</Text>
-      <Text style={styles.suggestionTitle}>{item.title}</Text>
-      <Text style={styles.suggestionMsg}>{item.message}</Text>
-      <View style={styles.suggestionSavings}>
-        <Text style={styles.suggestionSavingsText}>Save ₹{item.savings}</Text>
-      </View>
+      <Text style={styles.suggestionIcon}>{item.icon || '🤖'}</Text>
+      <Text style={styles.suggestionTitle}>{item.title || item.text}</Text>
+      {item.message ? <Text style={styles.suggestionMsg}>{item.message}</Text> : null}
+      {item.savings ? (
+        <View style={styles.suggestionSavings}>
+          <Text style={styles.suggestionSavingsText}>Save ₹{item.savings}</Text>
+        </View>
+      ) : null}
     </View>
   );
 
