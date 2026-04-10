@@ -10,6 +10,7 @@ import {
   FlatList,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import Svg, { Circle } from 'react-native-svg';
 import { useSpending } from '../hooks/useSpending';
 
 const { width } = Dimensions.get('window');
@@ -111,33 +112,65 @@ const SpendingScreen = () => {
           <Text style={styles.sectionTitle}>Category Breakdown</Text>
           <View style={styles.donutContainer}>
             <View style={styles.donutVisual}>
-              <View style={styles.donutOuter}>
-                <View style={styles.donutInner}>
-                  <Text style={styles.donutTotal}>₹{totalSpent}</Text>
-                  <Text style={styles.donutSubtext}>Total</Text>
-                </View>
+              {/* SVG Donut Chart */}
+              {(() => {
+                const size = 130;
+                const strokeWidth = 14;
+                const radius = (size - strokeWidth) / 2;
+                const circumference = 2 * Math.PI * radius;
+                let cumulativeOffset = 0;
+
+                return (
+                  <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                    {/* Background ring */}
+                    <Circle
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={radius}
+                      stroke="#1e1e2e"
+                      strokeWidth={strokeWidth}
+                      fill="none"
+                    />
+                    {/* Category segments */}
+                    {donutSegments.map((seg, idx) => {
+                      const segmentLength = (seg.percentage / 100) * circumference;
+                      const gapSize = donutSegments.length > 1 ? 3 : 0;
+                      const dashLength = Math.max(segmentLength - gapSize, 1);
+                      const offset = circumference * 0.25 - cumulativeOffset;
+                      cumulativeOffset += segmentLength;
+
+                      return (
+                        <Circle
+                          key={idx}
+                          cx={size / 2}
+                          cy={size / 2}
+                          r={radius}
+                          stroke={seg.color}
+                          strokeWidth={strokeWidth}
+                          fill="none"
+                          strokeDasharray={`${dashLength} ${circumference - dashLength}`}
+                          strokeDashoffset={offset}
+                          strokeLinecap="round"
+                        />
+                      );
+                    })}
+                  </Svg>
+                );
+              })()}
+              {/* Center label */}
+              <View style={styles.donutCenterLabel}>
+                <Text style={styles.donutTotal}>₹{totalSpent}</Text>
+                <Text style={styles.donutSubtext}>Total</Text>
               </View>
-              {/* Simulated donut ring segments */}
-              {donutSegments.map((seg, idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.donutSegmentIndicator,
-                    {
-                      backgroundColor: seg.color,
-                      top: 10 + idx * 5,
-                      left: idx % 2 === 0 ? -4 : undefined,
-                      right: idx % 2 !== 0 ? -4 : undefined,
-                    },
-                  ]}
-                />
-              ))}
             </View>
             <View style={styles.donutLegend}>
               {donutSegments.map((seg, idx) => (
                 <View key={idx} style={styles.legendItem}>
                   <View style={[styles.legendDot, { backgroundColor: seg.color }]} />
-                  <Text style={styles.legendName}>{seg.name}</Text>
+                  <View style={styles.legendTextWrap}>
+                    <Text style={styles.legendName}>{seg.name}</Text>
+                    <Text style={styles.legendAmount}>₹{seg.amount}</Text>
+                  </View>
                   <Text style={styles.legendPct}>{seg.percentage.toFixed(0)}%</Text>
                 </View>
               ))}
@@ -168,27 +201,46 @@ const SpendingScreen = () => {
         <View style={styles.heatmapCard}>
           <Text style={styles.sectionTitle}>Spending Heatmap</Text>
           <Text style={styles.heatmapSub}>Darker = more spending</Text>
-          <View style={styles.heatmapGrid}>
-            {heatmapData.map((val, idx) => (
-              <View
-                key={idx}
-                style={[
-                  styles.heatCell,
-                  {
-                    backgroundColor:
-                      val === 0
-                        ? '#1e1e28'
-                        : val < 500
-                        ? 'rgba(124, 106, 255, 0.2)'
-                        : val < 1000
-                        ? 'rgba(124, 106, 255, 0.4)'
-                        : val < 2000
-                        ? 'rgba(124, 106, 255, 0.6)'
-                        : '#7c6aff',
-                  },
-                ]}
-              />
+          {/* Day-of-week headers */}
+          <View style={styles.heatmapDayHeaders}>
+            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+              <Text key={i} style={styles.heatmapDayLabel}>{d}</Text>
             ))}
+          </View>
+          <View style={styles.heatmapGrid}>
+            {heatmapData.map((cell, idx) => {
+              const val = cell?.value ?? cell ?? 0;
+              const day = cell?.day ?? idx + 1;
+              // More prominent purple palette
+              const bg =
+                val === 0
+                  ? '#1a1530'
+                  : val < 0.2
+                  ? '#2d1f6b'
+                  : val < 0.4
+                  ? '#4a2fb0'
+                  : val < 0.6
+                  ? '#6b3fe0'
+                  : val < 0.8
+                  ? '#8b5cf6'
+                  : '#a855f7';
+              return (
+                <View
+                  key={idx}
+                  style={[styles.heatCell, { backgroundColor: bg }]}
+                >
+                  <Text style={styles.heatCellText}>{day}</Text>
+                </View>
+              );
+            })}
+          </View>
+          {/* Legend */}
+          <View style={styles.heatmapLegend}>
+            <Text style={styles.heatmapLegendLabel}>Less</Text>
+            {['#1a1530', '#2d1f6b', '#4a2fb0', '#6b3fe0', '#8b5cf6', '#a855f7'].map((c, i) => (
+              <View key={i} style={[styles.heatmapLegendBox, { backgroundColor: c }]} />
+            ))}
+            <Text style={styles.heatmapLegendLabel}>More</Text>
           </View>
         </View>
 
@@ -247,22 +299,21 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { color: '#f0efff', fontSize: 18, fontWeight: '700', marginBottom: 16 },
   donutContainer: { flexDirection: 'row', alignItems: 'center' },
-  donutVisual: { width: 120, height: 120, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  donutOuter: {
-    width: 110, height: 110, borderRadius: 55, borderWidth: 12,
-    borderColor: '#7c6aff', alignItems: 'center', justifyContent: 'center',
+  donutVisual: {
+    width: 130, height: 130, alignItems: 'center', justifyContent: 'center', position: 'relative',
   },
-  donutInner: { alignItems: 'center' },
-  donutTotal: { color: '#f0efff', fontSize: 16, fontWeight: '700' },
-  donutSubtext: { color: '#8884a8', fontSize: 10 },
-  donutSegmentIndicator: {
-    position: 'absolute', width: 8, height: 8, borderRadius: 4,
+  donutCenterLabel: {
+    position: 'absolute', alignItems: 'center', justifyContent: 'center',
   },
-  donutLegend: { flex: 1, marginLeft: 24, gap: 10 },
+  donutTotal: { color: '#f0efff', fontSize: 15, fontWeight: '700' },
+  donutSubtext: { color: '#8884a8', fontSize: 10, marginTop: 2 },
+  donutLegend: { flex: 1, marginLeft: 20, gap: 12 },
   legendItem: { flexDirection: 'row', alignItems: 'center' },
-  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
-  legendName: { color: '#f0efff', fontSize: 13, flex: 1 },
-  legendPct: { color: '#8884a8', fontSize: 13, fontWeight: '600' },
+  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  legendTextWrap: { flex: 1 },
+  legendName: { color: '#f0efff', fontSize: 13, fontWeight: '600' },
+  legendAmount: { color: '#8884a8', fontSize: 11, marginTop: 1 },
+  legendPct: { color: '#f0efff', fontSize: 14, fontWeight: '700', marginLeft: 8 },
   dailyCard: {
     backgroundColor: '#17171f', borderRadius: 20, padding: 20, marginBottom: 20,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
@@ -275,11 +326,30 @@ const styles = StyleSheet.create({
   barAmount: { color: '#8884a8', fontSize: 8, marginTop: 2 },
   heatmapCard: {
     backgroundColor: '#17171f', borderRadius: 20, padding: 20, marginBottom: 20,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(168, 85, 247, 0.15)',
   },
   heatmapSub: { color: '#8884a8', fontSize: 12, marginTop: -10, marginBottom: 14 },
-  heatmapGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  heatCell: { width: (width - 100) / 7, height: 20, borderRadius: 4 },
+  heatmapDayHeaders: {
+    flexDirection: 'row', marginBottom: 6, paddingHorizontal: 2,
+  },
+  heatmapDayLabel: {
+    width: (width - 100) / 7, textAlign: 'center',
+    color: '#8884a8', fontSize: 11, fontWeight: '600',
+  },
+  heatmapGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  heatCell: {
+    width: (width - 110) / 7, height: 38, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  heatCellText: {
+    color: '#ffffff', fontSize: 12, fontWeight: '700',
+  },
+  heatmapLegend: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginTop: 14, gap: 4,
+  },
+  heatmapLegendBox: { width: 18, height: 10, borderRadius: 3 },
+  heatmapLegendLabel: { color: '#8884a8', fontSize: 10, fontWeight: '500', marginHorizontal: 4 },
   suggestionsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
   suggestionsIcon: { fontSize: 18 },
   suggestionsList: { paddingBottom: 8, gap: 12 },

@@ -18,7 +18,9 @@ export const useSpending = () => {
   const [dailyData, setDailyData] = useState([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [topMerchants, setTopMerchants] = useState([]);
-  const [heatmapData, setHeatmapData] = useState(new Array(28).fill(0));
+  const [heatmapData, setHeatmapData] = useState(
+    new Array(28).fill(null).map((_, idx) => ({ value: 0, day: idx + 1 }))
+  );
   const [monthComparison, setMonthComparison] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
 

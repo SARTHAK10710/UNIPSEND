@@ -84,20 +84,31 @@ export const groupByMerchant = (transactions) => {
 };
 
 export const normalizeByDay = (transactions) => {
+  // Build a 28-day array with { value (0-1), day (date number) }
   if (!transactions || transactions.length === 0) {
-    return new Array(28).fill(0);
+    return new Array(28).fill(null).map((_, idx) => ({ value: 0, day: idx + 1 }));
   }
 
-  const dayAmounts = new Array(28).fill(0);
-  const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
-  const recent = sorted.slice(-28);
-
-  recent.forEach((tx, idx) => {
-    dayAmounts[idx] = Math.abs(tx.amount || 0);
+  // Group spending by day-of-month
+  const dayMap = {};
+  transactions.forEach((tx) => {
+    const date = new Date(tx.date);
+    const dayNum = date.getDate();
+    dayMap[dayNum] = (dayMap[dayNum] || 0) + Math.abs(tx.amount || 0);
   });
 
-  const max = Math.max(...dayAmounts, 1);
-  return dayAmounts.map((v) => v / max);
+  // Determine how many days to show (up to 28, based on the month)
+  const dates = transactions.map((tx) => new Date(tx.date));
+  const maxDate = dates.length > 0 ? Math.max(...dates.map((d) => d.getDate())) : 28;
+  const daysInGrid = Math.max(maxDate, 28);
+
+  const result = [];
+  for (let d = 1; d <= daysInGrid; d++) {
+    result.push({ value: dayMap[d] || 0, day: d });
+  }
+
+  const maxAmount = Math.max(...result.map((r) => r.value), 1);
+  return result.map((r) => ({ ...r, value: r.value / maxAmount }));
 };
 
 export const filterByMonth = (transactions, month, year) => {
