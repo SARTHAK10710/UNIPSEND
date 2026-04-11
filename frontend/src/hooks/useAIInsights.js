@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { aiService, getEmptyAIResponse } from '../services/aiService';
 import { plaidAPI } from '../services/api';
+import { useSharedAIInsights } from '../context/AIInsightsContext';
 
 // ─────────────────────────────────────────────────────────────
-// useAIInsights
+// useAIInsightsInternal
 //
-// Centralized hook that fetches Plaid data, sends it to the
-// Unispend AI API, and exposes clean getter functions for every
-// screen (Home, Spending, Profile, Investment).
+// Core hook that fetches Plaid data, sends it to the
+// Unispend AI API, and exposes clean getter functions.
+// This is used ONLY by <AIInsightsProvider>. All screens
+// should use useAIInsights() which reads the shared context.
 // ─────────────────────────────────────────────────────────────
 
-export const useAIInsights = () => {
+export const useAIInsightsInternal = () => {
   // ── State ─────────────────────────────────────────────────
   const [insights, setInsights] = useState(getEmptyAIResponse());
   const [isLoading, setIsLoading] = useState(true);
@@ -91,7 +93,7 @@ export const useAIInsights = () => {
         currentBalance,
       );
 
-      console.log('[useAIInsights] insights received ✓');
+      console.log('[useAIInsights] insights received ✓ (health:', result?.financial_health_score, ')');
 
       // ─ 5. Update state ──────────────────────────────────
       setInsights(result);
@@ -221,5 +223,11 @@ export const useAIInsights = () => {
     refresh: fetchInsights,
   };
 };
+
+// ─────────────────────────────────────────────────────────────
+// Public hook — reads from the shared Context
+// Every screen should use this (not useAIInsightsInternal).
+// ─────────────────────────────────────────────────────────────
+export const useAIInsights = () => useSharedAIInsights();
 
 export default useAIInsights;

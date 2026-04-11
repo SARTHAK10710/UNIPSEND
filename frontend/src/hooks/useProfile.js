@@ -12,14 +12,10 @@ export const useProfile = () => {
   const ai = useAIInsights();
 
   const [profile, setProfile] = useState(null);
-  const [riskScore, setRiskScore] = useState(null);
-  const [riskLabel, setRiskLabel] = useState(null);
-  const [segment, setSegment] = useState(null);
   const [emergencyFund, setEmergencyFund] = useState(null);
   const [connectedAccounts, setConnectedAccounts] = useState([]);
 
   const [profileLoading, setProfileLoading] = useState(true);
-  const [riskLoading, setRiskLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -48,24 +44,7 @@ export const useProfile = () => {
     }
   }, [user]);
 
-  const fetchRiskScore = useCallback(async () => {
-    setRiskLoading(true);
-    try {
-      console.log('[useProfile] fetching risk score...');
-      const res = await userAPI.getRiskScore();
-      const data = res.data;
-      setRiskScore(data.risk_score);
-      setRiskLabel(data.label);
-      setSegment(data.segment);
-      console.log('[useProfile] risk score loaded:', data);
-    } catch (err) {
-      console.error('[useProfile] fetchRiskScore error:', err.message);
-      setRiskScore(null);
-      setRiskLabel(null);
-    } finally {
-      setRiskLoading(false);
-    }
-  }, []);
+
 
   const fetchAccounts = useCallback(async () => {
     setAccountsLoading(true);
@@ -115,24 +94,36 @@ export const useProfile = () => {
   const fetchAll = useCallback(async () => {
     setError(null);
     try {
-      await Promise.all([fetchProfile(), fetchRiskScore(), fetchAccounts()]);
+      await Promise.all([fetchProfile(), fetchAccounts()]);
     } catch (err) {
       setError('Failed to load profile data');
       console.error('[useProfile] fetchAll error:', err.message);
     }
-  }, [fetchProfile, fetchRiskScore, fetchAccounts]);
+  }, [fetchProfile, fetchAccounts]);
 
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
-  const isLoading = profileLoading && riskLoading && accountsLoading;
+  const isLoading = profileLoading && accountsLoading;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchAll();
+    ai.refresh();
     setRefreshing(false);
-  }, [fetchAll]);
+  }, [fetchAll, ai]);
+
+  // ── Derive risk score, label, and segment from AI API ──────
+  const aiRiskRaw = ai.getRiskScore();          // 0–1 decimal from AI
+  const riskScore = ai.getRiskScorePercent();    // 0–100 integer
+  const riskLabel = aiRiskRaw < 0.3 ? 'Conservative'
+    : aiRiskRaw < 0.6 ? 'Moderate'
+    : aiRiskRaw < 0.8 ? 'Aggressive'
+    : 'Very Aggressive';
+  const segment = aiRiskRaw < 0.3 ? 'conservative'
+    : aiRiskRaw < 0.6 ? 'balanced'
+    : 'growth';
 
   return {
     profile,
@@ -149,7 +140,7 @@ export const useProfile = () => {
 
     // AI data
     aiSpenderType: ai.getSpenderType(),
-    aiRiskScore: ai.getRiskScorePercent(),
+    aiRiskScore: riskScore,
     aiHealthScore: ai.getHealthScore(),
     aiCashflow: ai.getCashflow(),
     aiLoading: ai.isLoading,

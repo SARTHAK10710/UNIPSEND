@@ -106,76 +106,120 @@ ${investmentAdvice || 'No investment advice available'}
 12. For security questions: The app uses Firebase auth, encrypted data, bank-grade security via Plaid, and does not store bank credentials.`;
 };
 
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
+
 /**
- * Send a message to Gemini with conversation history + financial context
+ * Parse retry delay from a Gemini 429 response body (if available).
+ * Returns delay in ms, or 0 if not parseable.
+ */
+const parseRetryDelay = (bodyText) => {
+  try {
+    const json = JSON.parse(bodyText);
+    // The API often suggests a retryDelay like "0.994s" or "994.204976ms"
+    const message = json?.error?.message || '';
+    const msMatch = message.match(/retry in ([\d.]+)ms/i);
+    if (msMatch) return Math.ceil(parseFloat(msMatch[1]));
+    const sMatch = message.match(/retry in ([\d.]+)s/i);
+    if (sMatch) return Math.ceil(parseFloat(sMatch[1]) * 1000);
+  } catch { /* ignore parse errors */ }
+  return 0;
+};
+
+/**
+ * Send a message to Gemini with conversation history + financial context.
+ * Automatically retries on 429 (rate-limit) with exponential backoff.
  */
 export const chatWithGemini = async (userMessage, conversationHistory, systemPrompt) => {
-  try {
-    // Build contents array with conversation history
-    const contents = [];
+  // Build contents array with conversation history
+  const contents = [];
 
-    // Add conversation history (last 10 turns to stay within token limits)
-    const recentHistory = conversationHistory.slice(-10);
-    for (const msg of recentHistory) {
-      contents.push({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.text }],
-      });
-    }
-
-    // Add current user message
+  // Add conversation history (last 10 turns to stay within token limits)
+  const recentHistory = conversationHistory.slice(-10);
+  for (const msg of recentHistory) {
     contents.push({
-      role: 'user',
-      parts: [{ text: userMessage }],
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.text }],
     });
+  }
 
-    const body = {
-      contents,
-      systemInstruction: {
-        parts: [{ text: systemPrompt }],
-      },
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.9,
-        topK: 40,
-        maxOutputTokens: 1024,
-      },
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-      ],
-    };
+  // Add current user message
+  contents.push({
+    role: 'user',
+    parts: [{ text: userMessage }],
+  });
 
-    console.log('[Gemini] sending message...');
+  const body = {
+    contents,
+    systemInstruction: {
+      parts: [{ text: systemPrompt }],
+    },
+    generationConfig: {
+      temperature: 0.7,
+      topP: 0.9,
+      topK: 40,
+      maxOutputTokens: 1024,
+    },
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    ],
+  };
 
-    const response = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`[Gemini] sending message${attempt > 0 ? ` (retry ${attempt}/${MAX_RETRIES})` : ''}...`);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('[Gemini] API error:', response.status, errText);
+      const response = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      // ── Handle 429 rate-limit with retry ──────────────────────
+      if (response.status === 429) {
+        const errText = await response.text();
+
+        if (attempt < MAX_RETRIES) {
+          const apiDelay = parseRetryDelay(errText);
+          const backoff = apiDelay || BASE_DELAY_MS * Math.pow(2, attempt);
+          console.warn(`[Gemini] rate-limited (429), retrying in ${backoff}ms...`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+
+        // Final attempt exhausted
+        console.warn('[Gemini] rate-limit exceeded after retries, falling back to local engine');
+        return null;
+      }
+
+      // ── Handle other non-OK statuses ──────────────────────────
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[Gemini] API error:', response.status, errText);
+        return null;
+      }
+
+      // ── Success ───────────────────────────────────────────────
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (text) {
+        console.log('[Gemini] response received ✓');
+        return text.trim();
+      }
+
+      console.warn('[Gemini] empty response');
+      return null;
+    } catch (err) {
+      console.error('[Gemini] error:', err.message);
       return null;
     }
-
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (text) {
-      console.log('[Gemini] response received ✓');
-      return text.trim();
-    }
-
-    console.warn('[Gemini] empty response');
-    return null;
-  } catch (err) {
-    console.error('[Gemini] error:', err.message);
-    return null;
   }
+
+  return null;
 };
 
 export default { buildSystemPrompt, chatWithGemini };
