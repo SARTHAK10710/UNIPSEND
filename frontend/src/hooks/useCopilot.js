@@ -74,6 +74,52 @@ const buildFinancialContext = (ai, txs) => {
 // Local Fallback (simplified — used if Gemini is down)
 // ─────────────────────────────────────────────────────────────
 
+// ── Price parser for natural language ────────────────────────
+const parsePrice = (text) => {
+  const t = text.toLowerCase().replace(/,/g, '');
+
+  // "1 crore", "1.5cr", "50 lakh", "2.5L"
+  const crMatch = t.match(/([\d.]+)\s*(?:crore|cr)\b/);
+  if (crMatch) return parseFloat(crMatch[1]) * 10000000;
+  const lakhMatch = t.match(/([\d.]+)\s*(?:lakh|lac|l)\b/);
+  if (lakhMatch) return parseFloat(lakhMatch[1]) * 100000;
+
+  // "₹50000", "Rs 50000", "50k", "50000"
+  const kMatch = t.match(/([\d.]+)\s*k\b/);
+  if (kMatch) return parseFloat(kMatch[1]) * 1000;
+  const numMatch = t.match(/(?:₹|rs\.?\s*|inr\s*)([\d.]+)/);
+  if (numMatch) return parseFloat(numMatch[1]);
+
+  // Known items with typical prices
+  const knownPrices = {
+    'iphone': 80000, 'iphone 15': 80000, 'iphone 16': 110000, 'iphone 17': 130000,
+    'macbook': 150000, 'mac': 150000, 'laptop': 70000, 'ps5': 50000,
+    'car': 800000, 'bike': 120000, 'scooter': 80000,
+    'ipad': 45000, 'airpods': 15000, 'watch': 35000, 'apple watch': 45000,
+  };
+
+  for (const [item, price] of Object.entries(knownPrices)) {
+    if (t.includes(item)) return price;
+  }
+
+  // Bare number > 100 (likely a price)
+  const bareNum = t.match(/\b(\d{3,})\b/);
+  if (bareNum) return parseFloat(bareNum[1]);
+
+  return null;
+};
+
+// ── Extract what the user wants to buy ──────────────────────
+const parseItem = (text) => {
+  const match = text.match(/(?:afford|buy|purchase|get)\s+(?:a|an|the)?\s*(.+?)(?:\?|$|next|this|in\s+\d)/i);
+  if (match) return match[1].trim().replace(/\s+/g, ' ');
+
+  const match2 = text.match(/(?:can i|will i|could i)\s+.*?(?:afford|buy|get)\s+(?:a|an|the)?\s*(.+?)(?:\?|$)/i);
+  if (match2) return match2[1].trim().replace(/\s+/g, ' ');
+
+  return 'that item';
+};
+
 const buildLocalFallback = (query, ctx) => {
   const q = query.toLowerCase();
 
@@ -96,10 +142,30 @@ const buildLocalFallback = (query, ctx) => {
     return `💚 Financial health score: **${ctx.healthScore}/100**\n\n• Spender type: **${ctx.spenderType}**\n• Risk: **${Math.round(ctx.riskScore * 100)}%**\n• Trend: **${ctx.spendingTrend}**`;
   }
 
-  // Afford / buy
-  if (/afford|buy|purchase/i.test(q)) {
+  // ── Affordability Calculator (UPGRADED) ─────────────────
+  if (/afford|buy|purchase|can i get/i.test(q)) {
+    const price = parsePrice(q);
+    const item = parseItem(query);
     const spare = Math.max(ctx.monthlyDisposable, 0);
-    return `💰 Your monthly spare capacity is ~**${formatCurrency(spare)}**\n\n• Monthly spending: ${formatCurrency(ctx.monthlyEstimate)}\n• Health score: ${ctx.healthScore}/100\n\nTell me the price and I'll calculate if you can afford it!`;
+
+    if (!price) {
+      return `💰 Your monthly spare capacity is ~**${formatCurrency(spare)}**\n\n• Monthly spending: ${formatCurrency(ctx.monthlyEstimate)}\n• Health score: ${ctx.healthScore}/100\n\nTell me the item and price (e.g. "Can I afford an iPhone 17 for ₹1,30,000?") and I'll calculate!`;
+    }
+
+    const monthsNeeded = spare > 0 ? Math.ceil(price / spare) : null;
+    const canAffordNow = spare >= price;
+    const weeksNeeded = spare > 0 ? Math.ceil(price / (spare / 4.33)) : null;
+
+    if (canAffordNow) {
+      return `✅ **Yes, you can afford ${item}!**\n\n💰 Price: **${formatCurrency(price)}**\n💸 Your monthly spare: **${formatCurrency(spare)}**\n\nYou have enough spare capacity this month! After buying, you'd still have ~**${formatCurrency(spare - price)}** left.\n\n💡 **Tip**: Your health score is **${ctx.healthScore}/100** — ${ctx.healthScore >= 70 ? 'looking good, go for it!' : 'consider if this is essential since your health score could be better.'}`;
+    }
+
+    if (monthsNeeded && monthsNeeded <= 24) {
+      const savingsPerMonth = Math.ceil(price / monthsNeeded);
+      return `🤔 **${item} costs ${formatCurrency(price)}** — here's the plan:\n\n💸 Your monthly spare: **${formatCurrency(spare)}**\n⏰ Time to save: **${monthsNeeded} month${monthsNeeded > 1 ? 's' : ''}** (~${weeksNeeded} weeks)\n💰 Save per month: **${formatCurrency(savingsPerMonth)}**\n\n📋 **Action plan**:\n1. Set aside **${formatCurrency(savingsPerMonth)}/month** starting now\n2. Cut **${ctx.categorySorted?.[0]?.[0] || 'top category'}** spending by ~${formatCurrency(Math.min(savingsPerMonth, ctx.categorySorted?.[0]?.[1] || 0))}\n3. Target date: **${new Date(Date.now() + monthsNeeded * 30 * 86400000).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}**\n\n${ctx.healthScore >= 60 ? '💚 Your finances are healthy enough to plan this!' : '⚠️ Consider improving your health score (currently ' + ctx.healthScore + '/100) before big purchases.'}`;
+    }
+
+    return `⚠️ **${item} at ${formatCurrency(price)} is a stretch right now.**\n\n💸 Monthly spare: **${formatCurrency(spare)}**\n⏰ Would take: **${monthsNeeded ? monthsNeeded + '+ months' : 'a very long time'}**\n\n💡 Consider:\n• Increasing income or reducing spending first\n• Looking for EMI/loan options\n• Setting a smaller savings goal first`;
   }
 
   // Savings
@@ -121,6 +187,20 @@ const buildLocalFallback = (query, ctx) => {
   // Greetings
   if (/hello|hi|hey/i.test(q)) {
     return "Hey there! 👋 Ask me anything about your finances!";
+  }
+
+  // Investment
+  if (/invest|sip|mutual fund|stock/i.test(q)) {
+    const spare = Math.max(ctx.monthlyDisposable, 0);
+    const sipAmount = Math.round(spare * 0.3 / 500) * 500 || 500;
+    return `📈 Investment snapshot:\n\n• Monthly spare: **${formatCurrency(spare)}**\n• Suggested SIP: **${formatCurrency(sipAmount)}/month** (30% of spare)\n• Risk profile: **${Math.round(ctx.riskScore * 100)}%**\n• Spender type: **${ctx.spenderType}**\n\n💡 With **${formatCurrency(sipAmount)}/month** in a diversified index fund (~12% annual return):\n• 1 year: ~**${formatCurrency(Math.round(sipAmount * 12.7))}**\n• 3 years: ~**${formatCurrency(Math.round(sipAmount * 43.1))}**\n• 5 years: ~**${formatCurrency(Math.round(sipAmount * 81.7))}**`;
+  }
+
+  // Budget / plan
+  if (/budget|plan|reduce|cut/i.test(q)) {
+    const topCat = ctx.categorySorted?.[0];
+    const spare = Math.max(ctx.monthlyDisposable, 0);
+    return `📋 Budget suggestion:\n\n• Monthly income: **${formatCurrency(ctx.totalIncome || ctx.monthlyEstimate * 1.2)}**\n• Monthly spending: **${formatCurrency(ctx.monthlyEstimate)}**\n• Spare: **${formatCurrency(spare)}**\n${topCat ? `\n🎯 **Top saving opportunity**: Cut **${topCat[0]}** (${formatCurrency(topCat[1])}) by 20% → save **${formatCurrency(Math.round(topCat[1] * 0.2))}/month** extra` : ''}`;
   }
 
   // Generic fallback

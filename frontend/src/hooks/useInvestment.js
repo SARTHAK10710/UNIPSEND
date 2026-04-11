@@ -1,7 +1,9 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { investmentAPI } from '../services/api';
 import { useAIInsights } from './useAIInsights';
 import { usePortfolio } from './usePortfolio';
+import { getLatestPrice as alpacaGetPrice } from '../services/alpacaService';
+import { getStockData, getIndicator } from '../services/alphaVantageService';
 
 const CRYPTO_SYMBOLS = ['BTC', 'ETH', 'DOGE', 'SOL', 'ADA', 'XRP', 'MATIC', 'DOT', 'AVAX', 'LINK'];
 
@@ -46,6 +48,14 @@ export const useInvestment = () => {
   const [movers, setMovers] = useState(null);
   const [orders, setOrders] = useState([]);
   const [allocation, setAllocation] = useState([]);
+
+  // ── New: Live price & market data state ──────────────────
+  const [livePrices, setLivePrices] = useState({});     // { AAPL: 260.43, ... }
+  const [stockData, setStockData] = useState(null);     // Alpha Vantage daily data
+  const [stockIndicator, setStockIndicator] = useState(null); // RSI/MACD data
+  const [selectedSymbol, setSelectedSymbol] = useState(null);
+  const [marketDataLoading, setMarketDataLoading] = useState(false);
+  const priceCache = useRef({});
 
   const [accountLoading, setAccountLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(true);
@@ -162,9 +172,95 @@ export const useInvestment = () => {
     }
   }, []);
 
+  // ── New: Fetch live price directly from Alpaca ────────────
+  const fetchLivePrice = useCallback(async (symbol) => {
+    // Check cache (valid for 30s)
+    const cached = priceCache.current[symbol];
+    if (cached && Date.now() - cached.time < 30000) {
+      return cached.price;
+    }
+    try {
+      console.log(`[useInvestment] fetching live price for ${symbol}...`);
+      const price = await alpacaGetPrice(symbol);
+      if (price) {
+        priceCache.current[symbol] = { price, time: Date.now() };
+        setLivePrices(prev => ({ ...prev, [symbol]: price }));
+      }
+      return price;
+    } catch (err) {
+      console.error('[useInvestment] fetchLivePrice error:', err.message);
+      return null;
+    }
+  }, []);
+
+  // ── New: Fetch live prices for all holdings ────────────────
+  const fetchAllLivePrices = useCallback(async () => {
+    if (holdings.length === 0) return;
+    try {
+      const symbols = holdings.map(h => h.symbol);
+      console.log('[useInvestment] fetching live prices for:', symbols);
+      const prices = await Promise.all(
+        symbols.map(s => alpacaGetPrice(s).catch(() => null))
+      );
+      const priceMap = {};
+      symbols.forEach((s, i) => {
+        if (prices[i]) {
+          priceMap[s] = prices[i];
+          priceCache.current[s] = { price: prices[i], time: Date.now() };
+        }
+      });
+      setLivePrices(prev => ({ ...prev, ...priceMap }));
+      console.log('[useInvestment] live prices loaded:', priceMap);
+    } catch (err) {
+      console.error('[useInvestment] fetchAllLivePrices error:', err.message);
+    }
+  }, [holdings]);
+
+  // ── New: Fetch Alpha Vantage market data for a symbol ──────
+  const marketDataFetching = useRef(null);
+  const fetchMarketData = useCallback(async (symbol) => {
+    // Guard: skip if already fetching this symbol or already showing it
+    if (marketDataFetching.current === symbol) return;
+    marketDataFetching.current = symbol;
+
+    setSelectedSymbol(symbol);
+    setMarketDataLoading(true);
+    try {
+      console.log(`[useInvestment] fetching Alpha Vantage data for ${symbol}...`);
+      const [daily, rsi] = await Promise.all([
+        getStockData(symbol).catch(() => null),
+        getIndicator(symbol, 'RSI', { time_period: 14 }).catch(() => null),
+      ]);
+      setStockData(daily);
+      setStockIndicator(rsi);
+      console.log(`[useInvestment] market data loaded for ${symbol} ✓`);
+    } catch (err) {
+      console.error('[useInvestment] fetchMarketData error:', err.message);
+      setStockData(null);
+      setStockIndicator(null);
+    } finally {
+      setMarketDataLoading(false);
+      marketDataFetching.current = null;
+    }
+  }, []);
+
+  const clearMarketData = useCallback(() => {
+    setSelectedSymbol(null);
+    setStockData(null);
+    setStockIndicator(null);
+    marketDataFetching.current = null;
+  }, []);
+
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // Fetch live prices after holdings are loaded
+  useEffect(() => {
+    if (holdings.length > 0) {
+      fetchAllLivePrices();
+    }
+  }, [holdings, fetchAllLivePrices]);
 
   // AI portfolio — depends on monthly estimate + health score
   const aiPortfolio = usePortfolio(
@@ -200,6 +296,17 @@ export const useInvestment = () => {
     placeOrder,
     fetchStockHistory,
     refresh: fetchAll,
+
+    // ── New: Live prices & market data ──────────────────────
+    livePrices,
+    fetchLivePrice,
+    fetchAllLivePrices,
+    stockData,
+    stockIndicator,
+    selectedSymbol,
+    marketDataLoading,
+    fetchMarketData,
+    clearMarketData,
 
     // AI data
     aiPortfolio: aiPortfolio.portfolio,

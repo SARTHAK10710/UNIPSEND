@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -65,6 +65,14 @@ const InvestmentScreen = () => {
     aiPortfolioLoading,
     investmentAdvice,
     aiAvailable,
+    // New: Alpaca direct + Alpha Vantage
+    livePrices,
+    fetchMarketData,
+    stockData,
+    stockIndicator,
+    selectedSymbol,
+    marketDataLoading,
+    clearMarketData,
   } = useInvestment();
 
   const riskScore = riskProfile?.risk_score || 0;
@@ -106,6 +114,26 @@ const InvestmentScreen = () => {
   };
 
   const riskColor = riskScore < 40 ? '#4effd6' : riskScore < 70 ? '#ffd166' : '#ff6b6b';
+
+  // Parse Alpha Vantage stock data for mini chart
+  const chartPoints = useMemo(() => {
+    if (!stockData?.timeSeries) return [];
+    const entries = Object.entries(stockData.timeSeries).slice(0, 7).reverse();
+    return entries.map(([date, data]) => ({
+      date: date.slice(5), // "01-15"
+      close: parseFloat(data['4. close']),
+      high: parseFloat(data['2. high']),
+      low: parseFloat(data['3. low']),
+    }));
+  }, [stockData]);
+
+  // Latest RSI value
+  const latestRSI = useMemo(() => {
+    if (!stockIndicator?.analysis) return null;
+    const firstEntry = Object.entries(stockIndicator.analysis)[0];
+    return firstEntry ? parseFloat(firstEntry[1].RSI).toFixed(1) : null;
+  }, [stockIndicator]);
+
 
   const renderMover = ({ item }) => <MarketMover {...item} />;
 
@@ -290,16 +318,129 @@ const InvestmentScreen = () => {
           contentContainerStyle={styles.moversList}
         />
 
-        {/* Top Holdings */}
+        {/* Top Holdings — with live prices */}
         <View style={styles.holdingsHeader}>
           <Text style={styles.sectionTitle}>Top Holdings</Text>
           <TouchableOpacity>
             <Text style={styles.viewAll}>View All</Text>
           </TouchableOpacity>
         </View>
-        {holdings.map((holding, idx) => (
-          <HoldingItem key={idx} {...holding} />
-        ))}
+        {holdings.map((holding, idx) => {
+          const livePrice = livePrices[holding.symbol];
+          const isSelected = selectedSymbol === holding.symbol;
+          return (
+            <TouchableOpacity
+              key={idx}
+              onPress={() => {
+                if (isSelected) {
+                  clearMarketData();
+                } else {
+                  fetchMarketData(holding.symbol);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.holdingRow, isSelected && styles.holdingRowSelected]}>
+                <View style={styles.holdingIcon}>
+                  <Text style={styles.holdingEmoji}>{holding.icon || '📊'}</Text>
+                </View>
+                <View style={styles.holdingInfo}>
+                  <Text style={styles.holdingSymbol}>{holding.symbol}</Text>
+                  <Text style={styles.holdingName}>{holding.name}</Text>
+                </View>
+                <View style={styles.holdingRight}>
+                  <Text style={styles.holdingPrice}>
+                    ₹{livePrice ? livePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : holding.price}
+                  </Text>
+                  {livePrice && (
+                    <View style={styles.liveBadge}>
+                      <Text style={styles.liveBadgeText}>LIVE</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.holdingChange, { color: holding.change >= 0 ? '#4effd6' : '#ff6b6b' }]}>
+                    {holding.change >= 0 ? '+' : ''}{holding.change}%
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* Stock Detail Panel (Alpha Vantage) */}
+        {selectedSymbol && (
+          <View style={styles.stockDetailCard}>
+            <View style={styles.stockDetailHeader}>
+              <Text style={styles.stockDetailTitle}>📈 {selectedSymbol} Market Data</Text>
+              <TouchableOpacity onPress={() => fetchMarketData(selectedSymbol)}>
+                <Text style={styles.refreshBtn}>{marketDataLoading ? '⏳' : '🔄'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {marketDataLoading ? (
+              <Text style={styles.stockDetailLoading}>Loading market data...</Text>
+            ) : chartPoints.length > 0 ? (
+              <>
+                {/* Mini price chart */}
+                <View style={styles.miniChart}>
+                  {chartPoints.map((pt, i) => {
+                    const allCloses = chartPoints.map(p => p.close);
+                    const minClose = Math.min(...allCloses);
+                    const maxClose = Math.max(...allCloses);
+                    const range = maxClose - minClose || 1;
+                    const heightPct = ((pt.close - minClose) / range) * 80 + 20;
+                    return (
+                      <View key={i} style={styles.miniChartCol}>
+                        <View style={styles.miniChartBarWrap}>
+                          <LinearGradient
+                            colors={pt.close >= (chartPoints[i - 1]?.close || pt.close) ? ['#4effd6', '#2dd4a8'] : ['#ff6b6b', '#ff4444']}
+                            style={[styles.miniChartBar, { height: `${heightPct}%` }]}
+                          />
+                        </View>
+                        <Text style={styles.miniChartLabel}>{pt.date}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Price stats */}
+                <View style={styles.stockStatsRow}>
+                  <View style={styles.stockStat}>
+                    <Text style={styles.stockStatLabel}>Close</Text>
+                    <Text style={styles.stockStatValue}>
+                      ₹{chartPoints[chartPoints.length - 1]?.close?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                  <View style={styles.stockStat}>
+                    <Text style={styles.stockStatLabel}>High</Text>
+                    <Text style={[styles.stockStatValue, { color: '#4effd6' }]}>
+                      ₹{chartPoints[chartPoints.length - 1]?.high?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                  <View style={styles.stockStat}>
+                    <Text style={styles.stockStatLabel}>Low</Text>
+                    <Text style={[styles.stockStatValue, { color: '#ff6b6b' }]}>
+                      ₹{chartPoints[chartPoints.length - 1]?.low?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                  {latestRSI && (
+                    <View style={styles.stockStat}>
+                      <Text style={styles.stockStatLabel}>RSI</Text>
+                      <Text style={[styles.stockStatValue, {
+                        color: latestRSI > 70 ? '#ff6b6b' : latestRSI < 30 ? '#4effd6' : '#ffd166'
+                      }]}>
+                        {latestRSI}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.stockDataSource}>Data: Alpha Vantage • Prices: Alpaca</Text>
+              </>
+            ) : (
+              <Text style={styles.stockDetailLoading}>No data available for {selectedSymbol}</Text>
+            )}
+          </View>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -434,6 +575,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#17171f', borderRadius: 16,
     padding: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
+  holdingRowSelected: {
+    borderColor: '#7c6aff',
+    backgroundColor: 'rgba(124, 106, 255, 0.05)',
+  },
   holdingIcon: {
     width: 44, height: 44, borderRadius: 14, backgroundColor: '#1e1e28',
     alignItems: 'center', justifyContent: 'center', marginRight: 14,
@@ -445,6 +590,39 @@ const styles = StyleSheet.create({
   holdingRight: { alignItems: 'flex-end' },
   holdingPrice: { color: '#f0efff', fontSize: 15, fontWeight: '700' },
   holdingChange: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  liveBadge: {
+    backgroundColor: 'rgba(78, 255, 214, 0.15)', borderRadius: 4,
+    paddingHorizontal: 6, paddingVertical: 2, marginTop: 2, alignSelf: 'flex-end',
+  },
+  liveBadgeText: { color: '#4effd6', fontSize: 8, fontWeight: '800', letterSpacing: 1 },
+  stockDetailCard: {
+    backgroundColor: '#17171f', borderRadius: 20, padding: 20, marginTop: 16, marginBottom: 16,
+    borderWidth: 1, borderColor: 'rgba(124, 106, 255, 0.2)',
+  },
+  stockDetailHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16,
+  },
+  stockDetailTitle: { color: '#f0efff', fontSize: 16, fontWeight: '700' },
+  refreshBtn: { fontSize: 18 },
+  stockDetailLoading: { color: '#8884a8', fontSize: 13, textAlign: 'center', paddingVertical: 20 },
+  miniChart: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
+    height: 100, marginBottom: 16,
+  },
+  miniChartCol: { alignItems: 'center', flex: 1 },
+  miniChartBarWrap: { width: 18, height: 80, justifyContent: 'flex-end', alignItems: 'center' },
+  miniChartBar: { width: 14, borderRadius: 7, minHeight: 8 },
+  miniChartLabel: { color: '#8884a8', fontSize: 9, fontWeight: '600', marginTop: 6 },
+  stockStatsRow: {
+    flexDirection: 'row', justifyContent: 'space-around',
+    backgroundColor: '#1e1e28', borderRadius: 12, padding: 14,
+  },
+  stockStat: { alignItems: 'center' },
+  stockStatLabel: { color: '#8884a8', fontSize: 10, fontWeight: '600', marginBottom: 4 },
+  stockStatValue: { color: '#f0efff', fontSize: 14, fontWeight: '700' },
+  stockDataSource: {
+    color: '#4a4660', fontSize: 10, textAlign: 'center', marginTop: 12, fontStyle: 'italic',
+  },
 });
 
 export default InvestmentScreen;
